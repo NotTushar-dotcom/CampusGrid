@@ -1,0 +1,127 @@
+@import "tailwindcss";
+
+/* =============================================================
+   CampusGrid / SIH 2026 — Design System (Tailwind v4)
+   ============================================================= */
+@theme inline {
+  /* ── HackDriven / SIH tokens ── */
+  --color-hd-bg:           #0B0F12;
+  --color-hd-bg-light:     #F8FAFC;
+  --color-hd-card:         #18181B;
+  --color-hd-border:       #27272A;
+  --color-hd-green:        #22C55E;
+  --color-hd-green-em:     #10B981;
+  --color-hd-green-deep:   #059669;
+  --color-hd-muted:        #94A3B8;
+  --color-hd-muted-light:  #475569;
+  --color-hd-headline:     #0F172A;
+
+  /* ── Legacy campus tokens ── */
+  --color-campus-bg:       #091413;
+  --color-campus-border:   #285A48;
+  --color-campus-primary:  #408A71;
+  --color-campus-mint:     #B0E4CC;
+  --color-campus-card:     #122522;
+
+  /* Typography */
+  --font-sans: var(--font-inter);
+  --font-mono: var(--font-geist-mono);
+}
+
+/* =============================================================
+   Base / Reset
+   ============================================================= */
+:root {
+  color-scheme: dark;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: 5rem;
+}
+
+body {
+  background-color: #0B0F12;
+  color: #ffffff;
+  font-family: var(--font-inter), system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  min-height: 100vh;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Light mode body override & Anti-FOUC rules */
+html.light,
+html.light body,
+body.light {
+  background-color: #F8FAFC !important;
+  color: #0F172A !important;
+  color-scheme: light;
+}
+
+html.light #home,
+html.light section,
+html.light main,
+html.light .bg-\[\#0B0F12\],
+html.light [style*="background-color: #0B0F12"],
+html.light [style*="background-color: rgb(11, 15, 18)"],
+html.light [style*="background: #0B0F12"],
+html.light [style*="background: rgb(11, 15, 18)"],
+html.light [style*="background: #0b0f12"],
+html.light [style*="background-color: #0b0f12"] {
+  background-color: #F8FAFC !important;
+}
+
+html.light [style*="linear-gradient(135deg, #0B0F12"],
+html.light [style*="linear-gradient(135deg, rgb(11, 15, 18)"] {
+  background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 50%, #d1fae5 100%) !important;
+}
+
+/* =============================================================
+   Scrollbar
+   ============================================================= */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: #0B0F12; }
+::-webkit-scrollbar-thumb { background: #27272A; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #22C55E; }
+html.light ::-webkit-scrollbar-track, body.light ::-webkit-scrollbar-track { background: #F8FAFC; }
+html.light ::-webkit-scrollbar-thumb, body.light ::-webkit-scrollbar-thumb { background: #CBD5E1; }
+
+/* Selection */
+::selection { background-color: #22C55E; color: #0B0F12; }
+
+/* =============================================================
+   Glassmorphism Utilities
+   ============================================================= */
+.glass-dark {
+  background: rgba(15, 23, 42, 0.65);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.glass-light {
+  background: rgba(255, 255, 255, 0.75);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(226, 232, 240, 0.8);
+}
+
+/* =============================================================
+   Misc Utilities
+   ============================================================= */
+.line-clamp-3 {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Green text glow */
+.text-glow-green {
+  text-shadow: 0 0 24px rgba(34, 197, 94, 0.45), 0 0 48px rgba(16, 185, 129, 0.2);
+}
