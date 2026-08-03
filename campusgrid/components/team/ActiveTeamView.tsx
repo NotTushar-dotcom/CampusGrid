@@ -1235,7 +1235,7 @@ export default function ActiveTeamView({ currentUser, supabaseUserId, team: init
           </div>
 
           {/* Roster Grid (Stacked 1-column on mobile, 2-column on desktop screens) */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
             {Array.from({ length: 6 }).map((_, idx) => {
               const m = members[idx];
 
@@ -1248,41 +1248,41 @@ export default function ActiveTeamView({ currentUser, supabaseUserId, team: init
                     key={m.id}
                     initial={{ opacity: 0, scale: 0.97 }}
                     animate={{ opacity: 1, scale: 1 }}
-                    className="rounded-2xl p-4 border transition-all hover:border-[#22C55E]/40 flex items-start justify-between gap-3 group relative"
+                    className="rounded-xl sm:rounded-2xl p-3 sm:p-4 border transition-all hover:border-[#22C55E]/40 flex items-start justify-between gap-2.5 sm:gap-3 group relative"
                     style={{
                       background: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)',
                       borderColor: dashBorder(isDark),
                     }}
                   >
                     {/* Left & Middle Content */}
-                    <div className="flex items-start gap-3.5 min-w-0 flex-1">
+                    <div className="flex items-start gap-2.5 sm:gap-3.5 min-w-0 flex-1">
                       {/* Left Section: Avatar */}
                       <GenderBadgeAvatar
                         gender={m.gender}
                         name={m.full_name}
                         isLeader={isThisLeader}
-                        size={44}
+                        size={38}
                       />
 
                       {/* Middle Section */}
-                      <div className="min-w-0 flex-1 space-y-1">
-                        {/* Row 1: Full Name + Gold (Leader) Badge */}
+                      <div className="min-w-0 flex-1 space-y-0.5 sm:space-y-1">
+                        {/* Row 1: Full Name + (Leader) Badge */}
                         <div className="flex items-center gap-1.5 flex-wrap">
-                          <h4 className="font-bold text-sm sm:text-base truncate" style={{ color: dashText(isDark) }}>
+                          <h4 className="font-bold text-xs sm:text-sm text-slate-100 leading-tight">
                             {m.full_name ?? 'Student'}
                           </h4>
                           {isThisLeader && (
-                            <span className="text-amber-400 italic text-sm font-medium">
+                            <span className="text-amber-400 italic text-xs font-semibold shrink-0">
                               (Leader)
                             </span>
                           )}
                         </div>
 
-                        {/* Row 2: Email address in muted text */}
+                        {/* Row 2: Email address in muted text (Fully visible, break-all for mobile) */}
                         {displayEmail && (
                           <a
                             href={`mailto:${displayEmail}`}
-                            className="block text-xs text-slate-400 hover:text-slate-200 truncate transition-colors"
+                            className="block text-[11px] sm:text-xs text-slate-400 break-all leading-snug hover:text-slate-200 transition-colors"
                           >
                             {displayEmail}
                           </a>
@@ -1290,11 +1290,11 @@ export default function ActiveTeamView({ currentUser, supabaseUserId, team: init
 
                         {/* Row 3: Roll Number + Year of Study */}
                         {(m.roll_number || m.year_of_study) && (
-                          <div className="text-xs text-slate-400 font-mono flex items-center gap-1.5 flex-wrap">
-                            {m.roll_number && <span>{m.roll_number}</span>}
-                            {m.roll_number && m.year_of_study && <span>•</span>}
+                          <div className="text-[10px] sm:text-xs text-slate-400 font-mono flex items-center gap-1.5 flex-wrap pt-0.5">
+                            {m.roll_number && <span className="tracking-tight">{m.roll_number}</span>}
+                            {m.roll_number && m.year_of_study && <span className="opacity-50">•</span>}
                             {m.year_of_study && (
-                              <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-[#818CF8]/15 border border-[#818CF8]/30 text-[#818CF8]">
+                              <span className="px-1.5 py-0.5 rounded-md text-[9px] sm:text-[10px] font-semibold bg-[#818CF8]/15 border border-[#818CF8]/30 text-[#818CF8]">
                                 {m.year_of_study}
                               </span>
                             )}
@@ -1308,7 +1308,7 @@ export default function ActiveTeamView({ currentUser, supabaseUserId, team: init
                               <Pill key={s} label={s} color="#22C55E" />
                             ))}
                             {m.skills.length > 4 && (
-                              <span className="text-[10px] self-center text-slate-400">
+                              <span className="text-[9px] self-center text-slate-400">
                                 +{m.skills.length - 4}
                               </span>
                             )}
@@ -1317,21 +1317,21 @@ export default function ActiveTeamView({ currentUser, supabaseUserId, team: init
                       </div>
                     </div>
 
-                    {/* Right Section: Three-dots menu icon (MoreHorizontal) */}
+                    {/* Right Section: Three-dots menu icon */}
                     <div className="relative shrink-0">
                       <button
                         onClick={() => setActiveMemberMenu(activeMemberMenu === m.id ? null : m.id)}
-                        className="p-1.5 rounded-lg border transition-all text-slate-400 hover:text-white hover:bg-white/10"
+                        className="p-1 sm:p-1.5 rounded-lg border transition-all text-slate-400 hover:text-white hover:bg-white/10"
                         style={{ borderColor: dashBorder(isDark) }}
                         title="Member Actions"
                       >
-                        <MoreHorizontal size={18} />
+                        <MoreHorizontal size={16} />
                       </button>
 
                       {/* Member Action Dropdown */}
                       {activeMemberMenu === m.id && (
                         <div
-                          className="absolute right-0 top-9 z-30 w-44 rounded-xl p-1.5 shadow-2xl border flex flex-col gap-1 backdrop-blur-md"
+                          className="absolute right-0 top-8 sm:top-9 z-30 w-44 rounded-xl p-1.5 shadow-2xl border flex flex-col gap-1 backdrop-blur-md"
                           style={{
                             background: isDark ? '#0F172A' : '#FFFFFF',
                             borderColor: dashBorder(isDark),
@@ -1381,15 +1381,15 @@ export default function ActiveTeamView({ currentUser, supabaseUserId, team: init
               return (
                 <div
                   key={`empty-card-${idx}`}
-                  className="rounded-2xl p-4 border-2 border-dashed flex flex-col items-center justify-center gap-1 text-center min-h-[110px] opacity-60 hover:opacity-80 transition-opacity"
+                  className="rounded-xl sm:rounded-2xl p-2.5 sm:p-4 border-2 border-dashed flex items-center justify-center gap-2 text-center min-h-[48px] sm:min-h-[90px] opacity-50 hover:opacity-75 transition-opacity sm:flex-col"
                   style={{ borderColor: dashBorder(isDark), background: isDark ? 'rgba(255,255,255,0.01)' : 'rgba(0,0,0,0.01)' }}
                 >
-                  <div className="w-8 h-8 rounded-full border flex items-center justify-center" style={{ borderColor: dashBorder(isDark), color: dashText(isDark, true) }}>
-                    <UserPlus size={14} />
+                  <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-full border flex items-center justify-center" style={{ borderColor: dashBorder(isDark), color: dashText(isDark, true) }}>
+                    <UserPlus size={12} />
                   </div>
                   <div>
-                    <p className="text-xs font-semibold" style={{ color: dashText(isDark) }}>Empty Slot</p>
-                    <p className="text-[10px]" style={{ color: dashText(isDark, true) }}>Waiting for Member</p>
+                    <p className="text-[11px] sm:text-xs font-semibold" style={{ color: dashText(isDark) }}>Empty Slot</p>
+                    <p className="text-[9px] hidden sm:block" style={{ color: dashText(isDark, true) }}>Waiting for Member</p>
                   </div>
                 </div>
               );
