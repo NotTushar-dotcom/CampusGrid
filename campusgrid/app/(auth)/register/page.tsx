@@ -11,6 +11,7 @@ import {
 import { createClient } from '@/lib/supabase/client';
 import { IS_SUPABASE_CONFIGURED } from '@/lib/supabase/fallback';
 import { useTheme } from '@/components/theme/ThemeProvider';
+import { useAuth } from '@/components/auth/AuthProvider';
 
 /* ════════════════════════════════════════════════════════════
    CONSTANTS
@@ -113,6 +114,7 @@ function MultiSelect({
 export default function RegisterPage() {
   const router = useRouter();
   const { isDark } = useTheme();
+  const { refreshProfile } = useAuth();
 
   /* ── Form state ── */
   const [selectedRole, setSelectedRole] = useState<Role | null>(null);
@@ -333,11 +335,15 @@ export default function RegisterPage() {
       }
     }
 
+    if (refreshProfile) {
+      await refreshProfile();
+    }
+
     setIsLoading(false);
     setSuccess(true);
     setTimeout(() => {
       router.push(selectedRole === 'faculty' ? '/dashboard/mentor' : '/dashboard/team');
-    }, 1800);
+    }, 1200);
   };
 
   /* ── Theme tokens ── */

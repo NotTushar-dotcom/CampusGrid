@@ -163,4 +163,5 @@ export interface AuthContextType {
   isConfigured: boolean;
   isLoading: boolean;
   signOut: () => Promise<void>;
+  refreshProfile?: () => Promise<User | null>;
 }

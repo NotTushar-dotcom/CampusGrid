@@ -34,8 +34,14 @@ function TeamDashboardInner() {
 
   /* ── Auth guard ── */
   useEffect(() => {
-    if (!isLoading && (!user || profile?.role !== 'student')) {
-      router.replace('/login');
+    if (!isLoading) {
+      if (!user) {
+        router.replace('/login');
+      } else if (profile?.role === 'faculty') {
+        router.replace('/dashboard/mentor');
+      } else if (profile?.role === 'admin_spoc') {
+        router.replace('/admin');
+      }
     }
   }, [user, profile, isLoading, router]);
 

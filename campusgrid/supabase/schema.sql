@@ -256,3 +256,63 @@ CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW
   EXECUTE FUNCTION public.handle_new_user();
+
+-- =============================================================
+-- TABLE & TRIGGER: faculty_mentors <-> public.users auto sync
+-- =============================================================
+CREATE TABLE IF NOT EXISTS public.faculty_mentors (
+  id                  UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  full_name           TEXT NOT NULL,
+  email               TEXT UNIQUE NOT NULL,
+  designation         TEXT,
+  department          TEXT,
+  contact_number      TEXT,
+  sih_themes          TEXT[] DEFAULT '{}',
+  areas_of_expertise  TEXT[] DEFAULT '{}',
+  created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+ALTER TABLE public.faculty_mentors ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "FacultyMentors: select all authenticated" ON public.faculty_mentors;
+CREATE POLICY "FacultyMentors: select all authenticated"
+  ON public.faculty_mentors FOR SELECT TO authenticated USING (true);
+
+DROP POLICY IF EXISTS "FacultyMentors: insert own profile" ON public.faculty_mentors;
+CREATE POLICY "FacultyMentors: insert own profile"
+  ON public.faculty_mentors FOR INSERT TO authenticated WITH CHECK (auth.uid() = id);
+
+DROP POLICY IF EXISTS "FacultyMentors: update own profile" ON public.faculty_mentors;
+CREATE POLICY "FacultyMentors: update own profile"
+  ON public.faculty_mentors FOR UPDATE TO authenticated USING (auth.uid() = id) WITH CHECK (auth.uid() = id);
+
+CREATE OR REPLACE FUNCTION public.sync_faculty_to_users()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  INSERT INTO public.users (id, role)
+  VALUES (NEW.id, 'faculty')
+  ON CONFLICT (id) DO UPDATE SET role = 'faculty';
+
+  UPDATE public.users SET
+    full_name      = NEW.full_name,
+    email          = NEW.email,
+    designation    = NEW.designation,
+    department     = NEW.department,
+    contact_number = NEW.contact_number,
+    sih_themes     = NEW.sih_themes
+  WHERE id = NEW.id;
+
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS on_faculty_mentor_upsert ON public.faculty_mentors;
+CREATE TRIGGER on_faculty_mentor_upsert
+  AFTER INSERT OR UPDATE ON public.faculty_mentors
+  FOR EACH ROW
+  EXECUTE FUNCTION public.sync_faculty_to_users();
+

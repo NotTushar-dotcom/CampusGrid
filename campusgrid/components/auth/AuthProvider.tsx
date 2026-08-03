@@ -33,8 +33,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
    *      → synthesises a User-shaped object with role = 'faculty'
    */
   const fetchProfile = useCallback(
-    async (userId: string, userEmail?: string) => {
-      if (!supabase) return;
+    async (userId: string, userEmail?: string, attempt = 1): Promise<User | null> => {
+      if (!supabase) return null;
 
       // 1. Primary lookup for Faculty Mentors: public.faculty_mentors
       try {
@@ -55,7 +55,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const activeMentor = mentorRow || mentorByEmail;
 
         if (activeMentor) {
-          setProfile({
+          const userObj: User = {
             id: activeMentor.id,
             email: activeMentor.email ?? userEmail ?? '',
             full_name: activeMentor.full_name ?? null,
@@ -67,8 +67,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             contact_number: activeMentor.contact_number ?? null,
             sih_themes: activeMentor.sih_themes ?? activeMentor.areas_of_expertise ?? [],
             created_at: activeMentor.created_at,
-          } as User);
-          return;
+          };
+          setProfile(userObj);
+          return userObj;
         }
       } catch {
         // faculty_mentors table check optional fallback
@@ -83,7 +84,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (profileById) {
         setProfile(profileById as User);
-        return;
+        return profileById as User;
       }
 
       // 3. Fallback by email in public.users
@@ -96,14 +97,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         if (profileByEmail) {
           setProfile(profileByEmail as User);
-          return;
+          return profileByEmail as User;
         }
       }
 
+      // Retry once after 350ms if profile row hasn't completed inserting during fast registration
+      if (attempt < 2) {
+        await new Promise((res) => setTimeout(res, 350));
+        return fetchProfile(userId, userEmail, attempt + 1);
+      }
+
       setProfile(null);
+      return null;
     },
     [supabase]
   );
+
+  const refreshProfile = useCallback(async (): Promise<User | null> => {
+    if (!user) return null;
+    return await fetchProfile(user.id, user.email);
+  }, [user, fetchProfile]);
 
   useEffect(() => {
     if (!supabase) {
@@ -145,7 +158,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, profile, session, isConfigured: IS_SUPABASE_CONFIGURED, isLoading, signOut }}
+      value={{ user, profile, session, isConfigured: IS_SUPABASE_CONFIGURED, isLoading, signOut, refreshProfile }}
     >
       {children}
     </AuthContext.Provider>
