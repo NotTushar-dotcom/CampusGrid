@@ -10,6 +10,7 @@ import {
   ClipboardList, MessageSquare, Mail, BookOpen, Zap,
   Calendar, Phone, Send, Award, Building2, Clock,
   ArrowRight, ExternalLink, AlertOctagon, UserCheck, Search, Check,
+  Settings, Edit3, Trash2, Plus, Sparkles, Sliders, RefreshCw,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import {
@@ -160,10 +161,14 @@ function rollToEmail(roll: string | null) {
 /* ─────────────────────────────────────────────── */
 /*  Main ActiveTeamView                            */
 /* ─────────────────────────────────────────────── */
-export default function ActiveTeamView({ currentUser, supabaseUserId, team, onTeamLeft }: ActiveTeamViewProps) {
+export default function ActiveTeamView({ currentUser, supabaseUserId, team: initialTeam, onTeamLeft }: ActiveTeamViewProps) {
   const { isDark } = useDashboardTheme();
   const router = useRouter();
   const supabase = createClient();
+
+  const [team, setTeam]                     = useState<Team>(initialTeam);
+  useEffect(() => { setTeam(initialTeam); }, [initialTeam]);
+
   const isLeader = team.leader_id === supabaseUserId;
 
   const [members, setMembers]               = useState<MemberRow[]>([]);
@@ -191,6 +196,19 @@ export default function ActiveTeamView({ currentUser, supabaseUserId, team, onTe
   const [pitchText, setPitchText]           = useState('');
   const [sendingPitch, setSendingPitch]     = useState(false);
 
+  /* Team Leader Modifications State */
+  const [showEditModal, setShowEditModal]       = useState(false);
+  const [editTeamName, setEditTeamName]         = useState('');
+  const [editPsId, setEditPsId]                 = useState('');
+  const [editStatus, setEditStatus]             = useState('recruiting');
+  const [editOpenRoles, setEditOpenRoles]       = useState<string[]>([]);
+  const [newRoleInput, setNewRoleInput]         = useState('');
+  const [availablePsOptions, setAvailablePsOptions] = useState<{ id: string; title?: string; category?: string }[]>([]);
+  const [savingTeam, setSavingTeam]             = useState(false);
+  const [showTransferConfirm, setShowTransferConfirm] = useState<MemberRow | null>(null);
+  const [showDisbandConfirm, setShowDisbandConfirm]   = useState(false);
+  const [disbanding, setDisbanding]             = useState(false);
+
   /* Danger Zone */
   const [showLeaveModal, setShowLeaveModal] = useState(false);
   const [leavingTeam, setLeavingTeam]       = useState(false);
@@ -198,6 +216,147 @@ export default function ActiveTeamView({ currentUser, supabaseUserId, team, onTe
   function showToast(msg: string, type: 'ok' | 'err' = 'ok') {
     setToast({ msg, type });
     setTimeout(() => setToast(null), 3500);
+  }
+
+  /* Open & Populate Team Edit Modal */
+  const openEditModal = useCallback(() => {
+    setEditTeamName(team.team_name ?? '');
+    setEditPsId(team.problem_statement_id ?? '');
+    setEditStatus(team.status ?? 'recruiting');
+    setEditOpenRoles(team.open_roles ?? []);
+    setNewRoleInput('');
+    setShowEditModal(true);
+  }, [team]);
+
+  const handleAddOpenRole = () => {
+    const trimmed = newRoleInput.trim();
+    if (!trimmed) return;
+    if (!editOpenRoles.includes(trimmed)) {
+      setEditOpenRoles((prev) => [...prev, trimmed]);
+    }
+    setNewRoleInput('');
+  };
+
+  const handleRemoveOpenRole = (roleToRemove: string) => {
+    setEditOpenRoles((prev) => prev.filter((r) => r !== roleToRemove));
+  };
+
+  /* Save Team Details (Leader Only) */
+  async function handleSaveTeamDetails() {
+    if (!supabase || !isLeader || !editTeamName.trim()) return;
+    setSavingTeam(true);
+    try {
+      const cleanName = editTeamName.trim();
+      const cleanPsId = editPsId.trim() || null;
+
+      const { error } = await supabase
+        .from('teams')
+        .update({
+          team_name: cleanName,
+          problem_statement_id: cleanPsId,
+          status: editStatus,
+          open_roles: editOpenRoles,
+        })
+        .eq('id', team.id);
+
+      if (error) {
+        showToast(error.message, 'err');
+      } else {
+        setTeam((prev) => ({
+          ...prev,
+          team_name: cleanName,
+          problem_statement_id: cleanPsId,
+          status: editStatus,
+          open_roles: editOpenRoles,
+        }));
+        showToast('Team settings updated successfully!');
+        setShowEditModal(false);
+
+        if (cleanPsId) {
+          const ps = availablePsOptions.find((p) => p.id === cleanPsId);
+          if (ps) {
+            setPsDetails({ title: ps.title ?? null, category: ps.category ?? null });
+          } else {
+            setPsDetails({ title: null, category: null });
+          }
+        } else {
+          setPsDetails({ title: null, category: null });
+        }
+        router.refresh();
+      }
+    } catch {
+      showToast('Failed to update team settings.', 'err');
+    }
+    setSavingTeam(false);
+  }
+
+  /* Transfer Leadership to another squad member */
+  async function handleTransferLeadership(targetMember: MemberRow) {
+    if (!supabase || !isLeader || targetMember.user_id === supabaseUserId) return;
+    setProcessing(`transfer-${targetMember.user_id}`);
+    try {
+      // 1. Update leader_id on teams table
+      const { error } = await supabase
+        .from('teams')
+        .update({ leader_id: targetMember.user_id })
+        .eq('id', team.id);
+
+      if (error) {
+        showToast(error.message, 'err');
+        setProcessing(null);
+        return;
+      }
+
+      // 2. Update role_in_team on team_members table
+      await supabase
+        .from('team_members')
+        .update({ role_in_team: 'Member' })
+        .eq('team_id', team.id)
+        .eq('user_id', supabaseUserId);
+
+      await supabase
+        .from('team_members')
+        .update({ role_in_team: 'Team Leader' })
+        .eq('team_id', team.id)
+        .eq('user_id', targetMember.user_id);
+
+      setTeam((prev) => ({ ...prev, leader_id: targetMember.user_id }));
+      showToast(`Leadership transferred to ${targetMember.full_name ?? 'Member'}!`);
+      setShowTransferConfirm(null);
+      setShowEditModal(false);
+      await loadMembers();
+      router.refresh();
+    } catch {
+      showToast('Failed to transfer leadership.', 'err');
+    }
+    setProcessing(null);
+  }
+
+  /* Disband Team permanently (Leader Only) */
+  async function handleDisbandTeam() {
+    if (!supabase || !isLeader) return;
+    setDisbanding(true);
+    try {
+      await supabase.from('team_members').delete().eq('team_id', team.id);
+      await supabase.from('team_join_requests').delete().eq('team_id', team.id);
+      await supabase.from('mentor_requests').delete().eq('team_id', team.id);
+      const { error } = await supabase.from('teams').delete().eq('id', team.id);
+
+      if (error) {
+        showToast(error.message, 'err');
+        setDisbanding(false);
+        return;
+      }
+
+      showToast('Team has been disbanded.');
+      setShowDisbandConfirm(false);
+      setShowEditModal(false);
+      if (onTeamLeft) onTeamLeft();
+      else router.push('/dashboard/team');
+    } catch (err: any) {
+      showToast(`Error disbanding team: ${err?.message ?? 'Unknown error'}`, 'err');
+    }
+    setDisbanding(false);
   }
 
   function copyCode() {
@@ -510,12 +669,15 @@ export default function ActiveTeamView({ currentUser, supabaseUserId, team, onTe
       if (ev) setEventDetails({ title: ev.title, start_date: ev.start_date, end_date: ev.end_date, description: ev.description });
     } catch { /* ignore */ }
 
-    if (team.problem_statement_id) {
+    if (team.event_id) {
       try {
         const { data: ev } = await supabase.from('events').select('ps_links').eq('id', team.event_id).maybeSingle();
-        if (ev?.ps_links) {
-          const ps = (ev.ps_links as any[]).find((p: any) => p.id === team.problem_statement_id);
-          if (ps) setPsDetails({ title: ps.title ?? null, category: ps.category ?? null });
+        if (ev?.ps_links && Array.isArray(ev.ps_links)) {
+          setAvailablePsOptions(ev.ps_links);
+          if (team.problem_statement_id) {
+            const ps = ev.ps_links.find((p: any) => p.id === team.problem_statement_id);
+            if (ps) setPsDetails({ title: ps.title ?? null, category: ps.category ?? null });
+          }
         }
       } catch { /* ignore */ }
     }
@@ -863,25 +1025,38 @@ export default function ActiveTeamView({ currentUser, supabaseUserId, team, onTe
                 </span>
               </div>
 
-              {/* SIH Diversity Badge */}
-              <span
-                className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold"
-                style={{
-                  background: hasGirlMember ? 'rgba(34, 197, 94, 0.12)' : 'rgba(245, 158, 11, 0.12)',
-                  border: `1px solid ${hasGirlMember ? 'rgba(34, 197, 94, 0.3)' : 'rgba(245, 158, 11, 0.3)'}`,
-                  color: hasGirlMember ? '#22C55E' : '#F59E0B',
-                }}
-              >
-                {hasGirlMember ? <Shield size={12} /> : <AlertTriangle size={12} />}
-                {hasGirlMember ? 'SIH Diversity Met ✓' : 'SIH 1 Female Mandate'}
-              </span>
+              {/* Leader Settings Button */}
+              {isLeader && (
+                <button
+                  onClick={openEditModal}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all shadow-md hover:scale-105 active:scale-95 border"
+                  style={{
+                    background: isDark ? 'rgba(129, 140, 248, 0.18)' : 'rgba(99, 102, 241, 0.12)',
+                    borderColor: 'rgba(129, 140, 248, 0.45)',
+                    color: '#818CF8',
+                  }}
+                >
+                  <Settings size={13} /> Edit Team Settings
+                </button>
+              )}
             </div>
 
             {/* Team Title & Creator */}
             <div>
-              <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight mb-1.5" style={{ color: dashText(isDark) }}>
-                {team.team_name}
-              </h1>
+              <div className="flex items-center gap-3.5">
+                <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight mb-1.5" style={{ color: dashText(isDark) }}>
+                  {team.team_name}
+                </h1>
+                {isLeader && (
+                  <button
+                    onClick={openEditModal}
+                    title="Rename Team"
+                    className="p-1.5 rounded-lg border text-xs text-[#818CF8] bg-indigo-500/10 border-indigo-500/30 hover:bg-indigo-500/20 transition-all mb-1.5"
+                  >
+                    <Edit3 size={15} />
+                  </button>
+                )}
+              </div>
               <div className="flex items-center gap-2 text-xs" style={{ color: dashText(isDark, true) }}>
                 <span>Created by <strong style={{ color: dashText(isDark) }}>{leaderName}</strong></span>
                 {isLeader ? (
@@ -897,13 +1072,13 @@ export default function ActiveTeamView({ currentUser, supabaseUserId, team, onTe
             </div>
 
             {/* Problem Statement Banner */}
-            {team.problem_statement_id && (
-              <div className="p-3.5 rounded-xl bg-indigo-500/10 border border-indigo-500/25 flex flex-wrap items-center gap-3">
+            <div className="p-3.5 rounded-xl bg-indigo-500/10 border border-indigo-500/25 flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-3 min-w-0 flex-1">
                 <BookOpen size={16} className="text-[#818CF8] shrink-0" />
                 <div className="min-w-0 flex-1">
                   <p className="text-[10px] font-bold uppercase tracking-widest text-[#818CF8]">SIH Problem Statement</p>
                   <p className="text-xs font-mono font-bold truncate" style={{ color: dashText(isDark) }}>
-                    {team.problem_statement_id} {psDetails.title ? `— ${psDetails.title}` : ''}
+                    {team.problem_statement_id ? `${team.problem_statement_id} ${psDetails.title ? `— ${psDetails.title}` : ''}` : 'No Problem Statement Selected Yet'}
                   </p>
                 </div>
                 {psDetails.category && (
@@ -912,7 +1087,15 @@ export default function ActiveTeamView({ currentUser, supabaseUserId, team, onTe
                   </span>
                 )}
               </div>
-            )}
+              {isLeader && (
+                <button
+                  onClick={openEditModal}
+                  className="px-2.5 py-1 rounded-lg text-xs font-bold bg-[#818CF8]/20 hover:bg-[#818CF8]/30 border border-[#818CF8]/40 text-[#818CF8] flex items-center gap-1 transition-all shrink-0"
+                >
+                  <Edit3 size={12} /> {team.problem_statement_id ? 'Change PS' : '+ Select PS'}
+                </button>
+              )}
+            </div>
 
             {/* Overlapping Avatars (6 Slots) & Code Bar */}
             <div className="pt-2 flex flex-wrap items-center justify-between gap-4 border-t" style={{ borderColor: dashBorder(isDark) }}>
@@ -1059,8 +1242,17 @@ export default function ActiveTeamView({ currentUser, supabaseUserId, team, onTe
               <Users size={16} className="text-[#22C55E]" />
               <h2 className="text-sm sm:text-base font-bold" style={{ color: dashText(isDark) }}>Team Members</h2>
             </div>
-            <span className="text-[11px] sm:text-xs font-bold px-2 py-0.5 rounded-full bg-[#22C55E]/15 border border-[#22C55E]/30 text-[#22C55E]">
-              {members.length} / 6 Slots Filled
+            {/* SIH Diversity Badge */}
+            <span
+              className="inline-flex items-center gap-1 text-[11px] sm:text-xs font-bold px-2.5 py-0.5 rounded-full"
+              style={{
+                background: hasGirlMember ? 'rgba(34, 197, 94, 0.12)' : 'rgba(245, 158, 11, 0.12)',
+                border: `1px solid ${hasGirlMember ? 'rgba(34, 197, 94, 0.3)' : 'rgba(245, 158, 11, 0.3)'}`,
+                color: hasGirlMember ? '#22C55E' : '#F59E0B',
+              }}
+            >
+              {hasGirlMember ? <Shield size={12} /> : <AlertTriangle size={12} />}
+              {hasGirlMember ? 'SIH Diversity Met ✓' : 'SIH 1 Female Mandate'}
             </span>
           </div>
 
@@ -1134,15 +1326,23 @@ export default function ActiveTeamView({ currentUser, supabaseUserId, team, onTe
                       </div>
                     )}
 
-                    {/* Leader Option: Remove Member */}
+                    {/* Leader Options: Promote to Leader & Remove Member */}
                     {isLeader && !isThisLeader && (
-                      <div className="pt-1 border-t flex justify-end" style={{ borderColor: dashBorder(isDark) }}>
+                      <div className="pt-1.5 border-t flex items-center justify-between gap-1" style={{ borderColor: dashBorder(isDark) }}>
+                        <button
+                          onClick={() => setShowTransferConfirm(m)}
+                          disabled={processing === m.id || processing === `transfer-${m.user_id}`}
+                          title="Make Team Leader"
+                          className="px-2 py-0.5 rounded-lg text-[9px] font-bold bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/25 transition-all flex items-center gap-1 disabled:opacity-50"
+                        >
+                          <Crown size={9} /> Promote
+                        </button>
                         <button
                           onClick={() => handleRemoveMember(m)}
                           disabled={processing === m.id}
                           className="px-2 py-0.5 rounded-lg text-[9px] font-bold bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/25 transition-all flex items-center gap-1 disabled:opacity-50"
                         >
-                          <X size={10} /> Remove
+                          <X size={9} /> Remove
                         </button>
                       </div>
                     )}
@@ -1553,16 +1753,28 @@ export default function ActiveTeamView({ currentUser, supabaseUserId, team, onTe
                 <h3 className="text-base font-bold" style={{ color: dashText(isDark) }}>Danger Zone</h3>
               </div>
               <p className="text-xs" style={{ color: dashText(isDark, true) }}>
-                Leaving this team removes you permanently. You'll need another invitation or the team code to rejoin.
+                {isLeader
+                  ? "As Team Leader, you can edit team settings, promote squad members, or permanently disband this team."
+                  : "Leaving this team removes you permanently. You'll need another invitation or the team code to rejoin."}
               </p>
             </div>
 
-            <button
-              onClick={() => setShowLeaveModal(true)}
-              className="py-2.5 px-5 rounded-xl text-xs font-bold border border-red-500/40 text-red-400 hover:bg-red-500/15 hover:border-red-500 transition-all shrink-0"
-            >
-              Leave Team
-            </button>
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
+              {isLeader && (
+                <button
+                  onClick={() => setShowDisbandConfirm(true)}
+                  className="py-2.5 px-4 rounded-xl text-xs font-bold bg-red-500/20 hover:bg-red-500/30 border border-red-500/40 text-red-400 transition-all flex items-center gap-1.5"
+                >
+                  <Trash2 size={13} /> Disband Team
+                </button>
+              )}
+              <button
+                onClick={() => setShowLeaveModal(true)}
+                className="py-2.5 px-4 rounded-xl text-xs font-bold border border-red-500/40 text-red-400 hover:bg-red-500/15 hover:border-red-500 transition-all"
+              >
+                Leave Team
+              </button>
+            </div>
           </div>
         </motion.div>
 
@@ -1762,7 +1974,361 @@ export default function ActiveTeamView({ currentUser, supabaseUserId, team, onTe
         )}
       </AnimatePresence>
 
-      {/* 4. Real-time Toast Alert */}
+      {/* 4. Team Settings & Modification Modal (Leader Only) */}
+      <AnimatePresence>
+        {showEditModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4"
+            style={{ background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(12px)' }}
+            onClick={() => setShowEditModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.94, y: 16 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.94, y: 16 }}
+              className="w-full max-w-xl max-h-[85vh] overflow-hidden rounded-2xl flex flex-col shadow-2xl border"
+              style={{ background: isDark ? '#0F172A' : '#FFFFFF', borderColor: 'rgba(129,140,248,0.3)' }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Modal Header */}
+              <div className="flex items-center justify-between px-6 py-4 border-b" style={{ borderColor: dashBorder(isDark) }}>
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-indigo-500/20 text-[#818CF8] flex items-center justify-center border border-indigo-500/30">
+                    <Settings size={16} />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-base" style={{ color: dashText(isDark) }}>Edit Team Settings</h3>
+                    <p className="text-[11px]" style={{ color: dashText(isDark, true) }}>Manage team details, PS, roles &amp; leadership</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowEditModal(false)}
+                  className="p-1.5 rounded-lg border text-xs"
+                  style={{ background: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)', borderColor: dashBorder(isDark), color: dashText(isDark, true) }}
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              {/* Modal Form Body */}
+              <div className="overflow-y-auto flex-1 p-6 space-y-5 text-xs">
+
+                {/* 1. Team Name */}
+                <div className="space-y-1.5">
+                  <label className="font-bold uppercase tracking-wider text-[10px]" style={{ color: dashText(isDark, true) }}>
+                    Team Name <span className="text-red-400">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={editTeamName}
+                    onChange={(e) => setEditTeamName(e.target.value)}
+                    placeholder="Enter team name"
+                    className="w-full px-3.5 py-2.5 rounded-xl text-sm font-semibold outline-none border transition-colors"
+                    style={{ background: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)', borderColor: dashBorder(isDark), color: dashText(isDark) }}
+                  />
+                </div>
+
+                {/* 2. SIH Problem Statement Selector */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="font-bold uppercase tracking-wider text-[10px]" style={{ color: dashText(isDark, true) }}>
+                      SIH Problem Statement
+                    </label>
+                    {editPsId && (
+                      <button
+                        onClick={() => setEditPsId('')}
+                        className="text-[10px] text-red-400 hover:underline"
+                      >
+                        Clear Selection
+                      </button>
+                    )}
+                  </div>
+
+                  {availablePsOptions.length > 0 ? (
+                    <select
+                      value={editPsId}
+                      onChange={(e) => setEditPsId(e.target.value)}
+                      className="w-full px-3.5 py-2.5 rounded-xl text-xs font-mono outline-none border transition-colors"
+                      style={{ background: isDark ? '#1E293B' : '#F8FAFC', borderColor: dashBorder(isDark), color: dashText(isDark) }}
+                    >
+                      <option value="">-- No Problem Statement Selected --</option>
+                      {availablePsOptions.map((ps) => (
+                        <option key={ps.id} value={ps.id}>
+                          {ps.id} {ps.title ? `— ${ps.title}` : ''} {ps.category ? `(${ps.category})` : ''}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      type="text"
+                      value={editPsId}
+                      onChange={(e) => setEditPsId(e.target.value)}
+                      placeholder="e.g. SIH1423"
+                      className="w-full px-3.5 py-2.5 rounded-xl text-xs font-mono outline-none border transition-colors"
+                      style={{ background: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)', borderColor: dashBorder(isDark), color: dashText(isDark) }}
+                    />
+                  )}
+                </div>
+
+                {/* 3. Team Status Toggle */}
+                <div className="space-y-1.5">
+                  <label className="font-bold uppercase tracking-wider text-[10px]" style={{ color: dashText(isDark, true) }}>
+                    Recruiting Status
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setEditStatus('recruiting')}
+                      className={`p-3 rounded-xl border text-xs font-bold transition-all flex items-center justify-center gap-2 ${
+                        editStatus === 'recruiting'
+                          ? 'bg-[#22C55E]/20 border-[#22C55E] text-[#22C55E]'
+                          : 'bg-white/5 border-white/10 text-white/60 hover:bg-white/10'
+                      }`}
+                    >
+                      <span className="w-2 h-2 rounded-full bg-[#22C55E] animate-pulse" />
+                      Recruiting (Open)
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setEditStatus('full')}
+                      className={`p-3 rounded-xl border text-xs font-bold transition-all flex items-center justify-center gap-2 ${
+                        editStatus === 'full'
+                          ? 'bg-blue-500/20 border-blue-500 text-blue-400'
+                          : 'bg-white/5 border-white/10 text-white/60 hover:bg-white/10'
+                      }`}
+                    >
+                      <span className="w-2 h-2 rounded-full bg-blue-500" />
+                      Team Complete (Closed)
+                    </button>
+                  </div>
+                </div>
+
+                {/* 4. Open Roles Manager */}
+                <div className="space-y-2">
+                  <label className="font-bold uppercase tracking-wider text-[10px]" style={{ color: dashText(isDark, true) }}>
+                    Open Member Roles Needed
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={newRoleInput}
+                      onChange={(e) => setNewRoleInput(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddOpenRole(); } }}
+                      placeholder="e.g. Frontend Developer, AI Engineer..."
+                      className="flex-1 px-3 py-2 rounded-xl text-xs outline-none border"
+                      style={{ background: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)', borderColor: dashBorder(isDark), color: dashText(isDark) }}
+                    />
+                    <button
+                      type="button"
+                      onClick={handleAddOpenRole}
+                      className="px-3 py-2 rounded-xl font-bold bg-[#818CF8]/20 hover:bg-[#818CF8]/30 border border-[#818CF8]/40 text-[#818CF8]"
+                    >
+                      + Add Role
+                    </button>
+                  </div>
+
+                  {editOpenRoles.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 pt-1">
+                      {editOpenRoles.map((role) => (
+                        <span
+                          key={role}
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-[#818CF8]/15 border border-[#818CF8]/35 text-[#818CF8]"
+                        >
+                          {role}
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveOpenRole(role)}
+                            className="hover:text-red-400 transition-colors"
+                          >
+                            <X size={12} />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* 5. Transfer Leadership Option */}
+                {members.filter((m) => m.user_id !== supabaseUserId).length > 0 && (
+                  <div className="pt-3 border-t space-y-2" style={{ borderColor: dashBorder(isDark) }}>
+                    <label className="font-bold uppercase tracking-wider text-[10px] text-amber-400 flex items-center gap-1">
+                      <Crown size={12} /> Transfer Team Leadership
+                    </label>
+                    <p className="text-[11px]" style={{ color: dashText(isDark, true) }}>
+                      Select a squad member to promote as the new Team Leader:
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                      {members
+                        .filter((m) => m.user_id !== supabaseUserId)
+                        .map((m) => (
+                          <button
+                            key={`transfer-btn-${m.id}`}
+                            type="button"
+                            onClick={() => setShowTransferConfirm(m)}
+                            className="p-2.5 rounded-xl border text-left flex items-center justify-between hover:bg-amber-500/10 hover:border-amber-500/30 transition-all"
+                            style={{ background: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)', borderColor: dashBorder(isDark) }}
+                          >
+                            <div className="min-w-0 flex-1">
+                              <p className="font-bold truncate" style={{ color: dashText(isDark) }}>{m.full_name ?? 'Member'}</p>
+                              <p className="text-[10px] text-[#818CF8] font-mono">{m.roll_number ?? 'Student'}</p>
+                            </div>
+                            <Crown size={14} className="text-amber-400 shrink-0 ml-2" />
+                          </button>
+                        ))}
+                    </div>
+                  </div>
+                )}
+
+              </div>
+
+              {/* Modal Footer Actions */}
+              <div className="flex items-center justify-between px-6 py-4 border-t" style={{ borderColor: dashBorder(isDark) }}>
+                <button
+                  type="button"
+                  onClick={() => setShowDisbandConfirm(true)}
+                  className="px-3 py-2 rounded-xl text-xs font-bold text-red-400 hover:bg-red-500/15 border border-red-500/30 transition-all flex items-center gap-1"
+                >
+                  <Trash2 size={13} /> Disband Team
+                </button>
+
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowEditModal(false)}
+                    className="px-4 py-2 rounded-xl text-xs font-bold border transition-all"
+                    style={{ background: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)', borderColor: dashBorder(isDark), color: dashText(isDark, true) }}
+                  >
+                    Cancel
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleSaveTeamDetails}
+                    disabled={savingTeam || !editTeamName.trim()}
+                    className="px-5 py-2 rounded-xl text-xs font-bold bg-[#22C55E] hover:bg-[#16a34a] text-black shadow-md shadow-[#22C55E]/20 flex items-center gap-1.5 transition-all disabled:opacity-50"
+                  >
+                    {savingTeam ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
+                    Save Changes
+                  </button>
+                </div>
+              </div>
+
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* 5. Transfer Leadership Confirmation Modal */}
+      <AnimatePresence>
+        {showTransferConfirm && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[60] flex items-center justify-center p-4"
+            style={{ background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(10px)' }}
+            onClick={() => setShowTransferConfirm(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.94, y: 12 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.94 }}
+              className="w-full max-w-md rounded-2xl p-6 space-y-4 border shadow-2xl"
+              style={{ background: isDark ? '#0F172A' : '#FFFFFF', borderColor: 'rgba(245,158,11,0.4)' }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center gap-3 text-amber-400">
+                <Crown size={24} />
+                <div>
+                  <h3 className="text-base font-bold" style={{ color: dashText(isDark) }}>Transfer Leadership</h3>
+                  <p className="text-xs" style={{ color: dashText(isDark, true) }}>Confirm new team leader</p>
+                </div>
+              </div>
+
+              <p className="text-xs leading-relaxed" style={{ color: dashText(isDark) }}>
+                Are you sure you want to promote <strong className="text-amber-400">{showTransferConfirm.full_name ?? 'this member'}</strong> to Team Leader? You will become a standard Team Member.
+              </p>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  onClick={() => setShowTransferConfirm(null)}
+                  className="flex-1 py-2.5 rounded-xl text-xs font-bold border transition-all"
+                  style={{ background: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)', borderColor: dashBorder(isDark), color: dashText(isDark, true) }}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => handleTransferLeadership(showTransferConfirm)}
+                  disabled={processing === `transfer-${showTransferConfirm.user_id}`}
+                  className="flex-1 py-2.5 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-600 text-black flex items-center justify-center gap-1.5 transition-all disabled:opacity-50"
+                >
+                  {processing === `transfer-${showTransferConfirm.user_id}` ? <Loader2 size={13} className="animate-spin" /> : <Crown size={13} />}
+                  Confirm Transfer
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* 6. Disband Team Confirmation Modal */}
+      <AnimatePresence>
+        {showDisbandConfirm && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[60] flex items-center justify-center p-4"
+            style={{ background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(10px)' }}
+            onClick={() => setShowDisbandConfirm(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.94, y: 12 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.94 }}
+              className="w-full max-w-md rounded-2xl p-6 space-y-4 border shadow-2xl"
+              style={{ background: isDark ? '#0F172A' : '#FFFFFF', borderColor: 'rgba(239,68,68,0.4)' }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center gap-3 text-red-400">
+                <AlertOctagon size={24} />
+                <div>
+                  <h3 className="text-base font-bold" style={{ color: dashText(isDark) }}>Permanently Disband Team?</h3>
+                  <p className="text-xs" style={{ color: dashText(isDark, true) }}>This action cannot be undone</p>
+                </div>
+              </div>
+
+              <p className="text-xs leading-relaxed" style={{ color: dashText(isDark) }}>
+                This will permanently delete team <strong className="text-red-400">{team.team_name}</strong> and remove all members and join requests.
+              </p>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  onClick={() => setShowDisbandConfirm(false)}
+                  className="flex-1 py-2.5 rounded-xl text-xs font-bold border transition-all"
+                  style={{ background: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)', borderColor: dashBorder(isDark), color: dashText(isDark, true) }}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleDisbandTeam}
+                  disabled={disbanding}
+                  className="flex-1 py-2.5 rounded-xl text-xs font-bold bg-red-500 hover:bg-red-600 text-white flex items-center justify-center gap-1.5 transition-all disabled:opacity-50"
+                >
+                  {disbanding ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
+                  Yes, Disband Team
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* 7. Real-time Toast Alert */}
       <AnimatePresence>
         {toast && (
           <motion.div
