@@ -174,12 +174,6 @@ export default function Navbar() {
                       </div>
                       <div className="py-1">
                         <button
-                          onClick={() => { setOnboardOpen(true); setUserMenuOpen(false); }}
-                          className={`w-full flex items-center gap-2.5 px-4 py-2.5 text-sm transition-all ${textMuted} ${hoverLink}`}
-                        >
-                          <Settings size={13} /> Edit Profile
-                        </button>
-                        <button
                           onClick={() => { signOut(); setUserMenuOpen(false); }}
                           className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-red-400/80 hover:text-red-400 hover:bg-red-500/10 transition-all"
                         >
