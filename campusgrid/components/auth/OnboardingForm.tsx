@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { X, Hash, Tag, CheckCircle, AlertCircle, Plus, User2 } from 'lucide-react';
+import { X, Hash, Tag, CheckCircle, AlertCircle, Plus, User2, BookOpen } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from './AuthProvider';
 
@@ -39,6 +39,7 @@ interface OnboardingFormProps {
 export default function OnboardingForm({ isOpen, onClose }: OnboardingFormProps) {
   const { user } = useAuth();
   const [rollNumber, setRollNumber]     = useState('');
+  const [yearOfStudy, setYearOfStudy]   = useState('');
   const [gender, setGender]             = useState<Gender | null>(null);
   const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
   const [customSkill, setCustomSkill]   = useState('');
@@ -73,6 +74,7 @@ export default function OnboardingForm({ isOpen, onClose }: OnboardingFormProps)
       setError('Security error: Roll number must consist strictly of 10 to 15 numeric digits (e.g. 2200290100001).');
       return;
     }
+    if (!yearOfStudy) { setError('Please select your Year of Study'); return; }
     if (!gender) { setError('Please select your gender'); return; }
 
     setIsLoading(true);
@@ -85,6 +87,7 @@ export default function OnboardingForm({ isOpen, onClose }: OnboardingFormProps)
         email:       user.email!,
         full_name:   user.user_metadata?.full_name ?? '',
         roll_number: cleanedRoll,
+        year_of_study: yearOfStudy,
         gender,
         skills:      selectedSkills,
       });
@@ -155,6 +158,26 @@ export default function OnboardingForm({ isOpen, onClose }: OnboardingFormProps)
               className="w-full px-4 py-2.5 bg-campus-bg border border-campus-border rounded-xl text-white placeholder-campus-mint/30 text-sm focus:outline-none focus:border-campus-primary transition-colors font-mono"
             />
             <p className="text-[11px] text-campus-mint/50">Only numbers allowed (10-15 digits, e.g. 2200290100001).</p>
+          </div>
+
+          {/* Year of Study */}
+          <div className="space-y-2">
+            <label className="text-xs font-medium text-campus-mint/70 uppercase tracking-wider flex items-center gap-1.5">
+              <BookOpen size={13} />
+              Year of Study <span className="text-red-400">*</span>
+            </label>
+            <select
+              required
+              value={yearOfStudy}
+              onChange={(e) => setYearOfStudy(e.target.value)}
+              className="w-full px-4 py-2.5 bg-campus-bg border border-campus-border rounded-xl text-white placeholder-campus-mint/30 text-sm focus:outline-none focus:border-campus-primary transition-colors cursor-pointer"
+            >
+              <option value="" disabled style={{ background: '#0F172A', color: 'rgba(255,255,255,0.4)' }}>Select Year of Study</option>
+              <option value="1st Year" style={{ background: '#0F172A', color: '#FFFFFF' }}>1st Year</option>
+              <option value="2nd Year" style={{ background: '#0F172A', color: '#FFFFFF' }}>2nd Year</option>
+              <option value="3rd Year" style={{ background: '#0F172A', color: '#FFFFFF' }}>3rd Year</option>
+              <option value="4th Year" style={{ background: '#0F172A', color: '#FFFFFF' }}>4th Year</option>
+            </select>
           </div>
 
           {/* Gender */}

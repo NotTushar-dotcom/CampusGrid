@@ -125,6 +125,7 @@ export default function RegisterPage() {
 
   /* Student fields */
   const [rollNumber, setRollNumber] = useState('');
+  const [yearOfStudy, setYearOfStudy] = useState('');
   const [gender, setGender] = useState<'male' | 'female' | null>(null);
   const [skills, setSkills] = useState<string[]>([]);
   const [customSkill, setCustomSkill] = useState('');
@@ -204,6 +205,10 @@ export default function RegisterPage() {
         setError('Security error: Roll number must consist strictly of 10 to 15 numeric digits (e.g. 2200290100001).');
         return;
       }
+      if (!yearOfStudy) {
+        setError('Please select your Year of Study.');
+        return;
+      }
       if (!gender) {
         setError('Please select your gender (Boy or Girl).');
         return;
@@ -272,6 +277,7 @@ export default function RegisterPage() {
         email: cleanedEmail,
         full_name: cleanedName,
         roll_number: cleanedRoll,
+        year_of_study: yearOfStudy,
         gender,
         skills,
         role: 'student' as const,
@@ -684,6 +690,32 @@ export default function RegisterPage() {
                       />
                     </div>
                     <p className="text-[11px] mt-1" style={{ color: textSub }}>Only numbers allowed (10-15 digits, e.g. 2200290100001).</p>
+                  </div>
+
+                  {/* Year of Study */}
+                  <div>
+                    <label className="block text-xs font-semibold uppercase tracking-wider mb-1.5" style={{ color: textMuted }}>
+                      Year of Study <span style={{ color: '#EF4444' }}>*</span>
+                    </label>
+                    <div className="relative">
+                      <BookOpen size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: '#22C55E' }} />
+                      <select
+                        id="reg-year-of-study"
+                        required
+                        value={yearOfStudy}
+                        onChange={(e) => setYearOfStudy(e.target.value)}
+                        className="w-full pl-9 pr-4 py-2.5 rounded-xl text-sm outline-none transition-all cursor-pointer"
+                        style={inputStyle}
+                        onFocus={onFocus}
+                        onBlur={onBlur}
+                      >
+                        <option value="" disabled style={{ background: isDark ? '#0F172A' : '#FFFFFF', color: textMuted }}>Select Year of Study</option>
+                        <option value="1st Year" style={{ background: isDark ? '#0F172A' : '#FFFFFF', color: isDark ? '#FFF' : '#000' }}>1st Year</option>
+                        <option value="2nd Year" style={{ background: isDark ? '#0F172A' : '#FFFFFF', color: isDark ? '#FFF' : '#000' }}>2nd Year</option>
+                        <option value="3rd Year" style={{ background: isDark ? '#0F172A' : '#FFFFFF', color: isDark ? '#FFF' : '#000' }}>3rd Year</option>
+                        <option value="4th Year" style={{ background: isDark ? '#0F172A' : '#FFFFFF', color: isDark ? '#FFF' : '#000' }}>4th Year</option>
+                      </select>
+                    </div>
                   </div>
 
                   {/* Gender Selection */}

@@ -10,7 +10,7 @@ import {
   ClipboardList, MessageSquare, Mail, BookOpen, Zap,
   Calendar, Phone, Send, Award, Building2, Clock,
   ArrowRight, ExternalLink, AlertOctagon, UserCheck, Search, Check,
-  Settings, Edit3, Trash2, Plus, Sparkles, Sliders, RefreshCw,
+  Settings, Edit3, Trash2, Plus, Sparkles, Sliders, RefreshCw, MoreHorizontal,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import {
@@ -36,6 +36,7 @@ interface MemberRow {
   full_name: string | null;
   email: string | null;
   roll_number: string | null;
+  year_of_study?: string | null;
   gender: 'male' | 'female' | null;
   skills: string[];
 }
@@ -208,6 +209,7 @@ export default function ActiveTeamView({ currentUser, supabaseUserId, team: init
   const [showTransferConfirm, setShowTransferConfirm] = useState<MemberRow | null>(null);
   const [showDisbandConfirm, setShowDisbandConfirm]   = useState(false);
   const [disbanding, setDisbanding]             = useState(false);
+  const [activeMemberMenu, setActiveMemberMenu] = useState<string | null>(null);
 
   /* Danger Zone */
   const [showLeaveModal, setShowLeaveModal] = useState(false);
@@ -420,7 +422,7 @@ export default function ActiveTeamView({ currentUser, supabaseUserId, team: init
     if (allUserIds.length > 0) {
       const { data: uProfiles } = await supabase
         .from('users')
-        .select('id, full_name, email, roll_number, gender, skills')
+        .select('id, full_name, email, roll_number, year_of_study, gender, skills')
         .in('id', allUserIds);
       if (uProfiles) {
         uProfiles.forEach((u: any) => {
@@ -439,6 +441,7 @@ export default function ActiveTeamView({ currentUser, supabaseUserId, team: init
         full_name: row.full_name ?? uProfile?.full_name ?? 'Student Member',
         email: row.email ?? uProfile?.email ?? null,
         roll_number: row.roll_number ?? uProfile?.roll_number ?? null,
+        year_of_study: uProfile?.year_of_study ?? null,
         gender: uProfile?.gender ?? null,
         skills: uProfile?.skills ?? [],
       };
@@ -456,6 +459,7 @@ export default function ActiveTeamView({ currentUser, supabaseUserId, team: init
           full_name: uProfile?.full_name ?? 'Student Member',
           email: uProfile?.email ?? null,
           roll_number: uProfile?.roll_number ?? null,
+          year_of_study: uProfile?.year_of_study ?? null,
           gender: uProfile?.gender ?? null,
           skills: uProfile?.skills ?? [],
         });
@@ -485,6 +489,7 @@ export default function ActiveTeamView({ currentUser, supabaseUserId, team: init
         full_name: uProfile?.full_name ?? (currentUser?.id === team.leader_id ? currentUser.full_name : 'Team Leader'),
         email: uProfile?.email ?? (currentUser?.id === team.leader_id ? currentUser.email : null),
         roll_number: uProfile?.roll_number ?? (currentUser?.id === team.leader_id ? currentUser.roll_number : null),
+        year_of_study: uProfile?.year_of_study ?? (currentUser?.id === team.leader_id ? currentUser.year_of_study : null),
         gender: uProfile?.gender ?? (currentUser?.id === team.leader_id ? currentUser.gender : null),
         skills: uProfile?.skills ?? (currentUser?.id === team.leader_id ? currentUser.skills : []),
       };
@@ -1229,8 +1234,8 @@ export default function ActiveTeamView({ currentUser, supabaseUserId, team: init
             </span>
           </div>
 
-          {/* Roster Grid (Strictly 6 Slots — 3 columns x 2 rows fits on one screen without scrolling) */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 sm:gap-3">
+          {/* Roster Grid (Stacked 1-column on mobile, 2-column on desktop screens) */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {Array.from({ length: 6 }).map((_, idx) => {
               const m = members[idx];
 
@@ -1241,84 +1246,133 @@ export default function ActiveTeamView({ currentUser, supabaseUserId, team: init
                 return (
                   <motion.div
                     key={m.id}
-                    initial={{ opacity: 0, scale: 0.96 }}
+                    initial={{ opacity: 0, scale: 0.97 }}
                     animate={{ opacity: 1, scale: 1 }}
-                    className="p-2.5 sm:p-3 rounded-xl border hover:border-[#22C55E]/40 transition-all flex flex-col justify-between gap-2 group min-h-[105px]"
-                    style={{ background: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)', borderColor: dashBorder(isDark) }}
+                    className="rounded-2xl p-4 border transition-all hover:border-[#22C55E]/40 flex items-start justify-between gap-3 group relative"
+                    style={{
+                      background: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)',
+                      borderColor: dashBorder(isDark),
+                    }}
                   >
-                    <div className="flex items-start gap-2">
+                    {/* Left & Middle Content */}
+                    <div className="flex items-start gap-3.5 min-w-0 flex-1">
+                      {/* Left Section: Avatar */}
                       <GenderBadgeAvatar
                         gender={m.gender}
                         name={m.full_name}
                         isLeader={isThisLeader}
-                        size={34}
+                        size={44}
                       />
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center justify-between gap-1">
-                          <h4 className="text-xs font-bold truncate" style={{ color: dashText(isDark) }}>
+
+                      {/* Middle Section */}
+                      <div className="min-w-0 flex-1 space-y-1">
+                        {/* Row 1: Full Name + Gold (Leader) Badge */}
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <h4 className="font-bold text-sm sm:text-base truncate" style={{ color: dashText(isDark) }}>
                             {m.full_name ?? 'Student'}
                           </h4>
                           {isThisLeader && (
-                            <span className="shrink-0 px-1.5 py-0.5 rounded-full text-[8px] font-bold bg-[#F59E0B]/15 border border-[#F59E0B]/30 text-[#F59E0B]">
-                              🏆 Leader
+                            <span className="text-amber-400 italic text-sm font-medium">
+                              (Leader)
                             </span>
                           )}
                         </div>
 
-                        {m.roll_number && (
-                          <div className="flex items-center gap-1 text-[10px] text-[#818CF8] font-mono mt-0.5">
-                            <Award size={10} className="shrink-0" />
-                            <span className="truncate">{m.roll_number}</span>
-                          </div>
-                        )}
-
+                        {/* Row 2: Email address in muted text */}
                         {displayEmail && (
                           <a
                             href={`mailto:${displayEmail}`}
-                            className="flex items-center gap-1 text-[10px] hover:opacity-80 truncate mt-0.5 transition-colors"
-                            style={{ color: dashText(isDark, true) }}
+                            className="block text-xs text-slate-400 hover:text-slate-200 truncate transition-colors"
                           >
-                            <Mail size={9} className="shrink-0" />
-                            <span className="truncate">{displayEmail}</span>
+                            {displayEmail}
                           </a>
+                        )}
+
+                        {/* Row 3: Roll Number + Year of Study */}
+                        {(m.roll_number || m.year_of_study) && (
+                          <div className="text-xs text-slate-400 font-mono flex items-center gap-1.5 flex-wrap">
+                            {m.roll_number && <span>{m.roll_number}</span>}
+                            {m.roll_number && m.year_of_study && <span>•</span>}
+                            {m.year_of_study && (
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-[#818CF8]/15 border border-[#818CF8]/30 text-[#818CF8]">
+                                {m.year_of_study}
+                              </span>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Row 4: Skill Tags */}
+                        {m.skills && m.skills.length > 0 && (
+                          <div className="flex flex-wrap gap-1 pt-1">
+                            {m.skills.slice(0, 4).map((s) => (
+                              <Pill key={s} label={s} color="#22C55E" />
+                            ))}
+                            {m.skills.length > 4 && (
+                              <span className="text-[10px] self-center text-slate-400">
+                                +{m.skills.length - 4}
+                              </span>
+                            )}
+                          </div>
                         )}
                       </div>
                     </div>
 
-                    {/* Skill Tags */}
-                    {m.skills.length > 0 && (
-                      <div className="flex flex-wrap gap-1 pt-1.5 border-t" style={{ borderColor: dashBorder(isDark) }}>
-                        {m.skills.slice(0, 3).map((s) => (
-                          <Pill key={s} label={s} color="#22C55E" />
-                        ))}
-                        {m.skills.length > 3 && (
-                          <span className="text-[9px] self-center" style={{ color: dashText(isDark, true) }}>
-                            +{m.skills.length - 3}
-                          </span>
-                        )}
-                      </div>
-                    )}
+                    {/* Right Section: Three-dots menu icon (MoreHorizontal) */}
+                    <div className="relative shrink-0">
+                      <button
+                        onClick={() => setActiveMemberMenu(activeMemberMenu === m.id ? null : m.id)}
+                        className="p-1.5 rounded-lg border transition-all text-slate-400 hover:text-white hover:bg-white/10"
+                        style={{ borderColor: dashBorder(isDark) }}
+                        title="Member Actions"
+                      >
+                        <MoreHorizontal size={18} />
+                      </button>
 
-                    {/* Leader Options: Promote to Leader & Remove Member */}
-                    {isLeader && !isThisLeader && (
-                      <div className="pt-1.5 border-t flex items-center justify-between gap-1" style={{ borderColor: dashBorder(isDark) }}>
-                        <button
-                          onClick={() => setShowTransferConfirm(m)}
-                          disabled={processing === m.id || processing === `transfer-${m.user_id}`}
-                          title="Make Team Leader"
-                          className="px-2 py-0.5 rounded-lg text-[9px] font-bold bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/25 transition-all flex items-center gap-1 disabled:opacity-50"
+                      {/* Member Action Dropdown */}
+                      {activeMemberMenu === m.id && (
+                        <div
+                          className="absolute right-0 top-9 z-30 w-44 rounded-xl p-1.5 shadow-2xl border flex flex-col gap-1 backdrop-blur-md"
+                          style={{
+                            background: isDark ? '#0F172A' : '#FFFFFF',
+                            borderColor: dashBorder(isDark),
+                          }}
                         >
-                          <Crown size={9} /> Promote
-                        </button>
-                        <button
-                          onClick={() => handleRemoveMember(m)}
-                          disabled={processing === m.id}
-                          className="px-2 py-0.5 rounded-lg text-[9px] font-bold bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/25 transition-all flex items-center gap-1 disabled:opacity-50"
-                        >
-                          <X size={9} /> Remove
-                        </button>
-                      </div>
-                    )}
+                          {isLeader && !isThisLeader && (
+                            <>
+                              <button
+                                onClick={() => {
+                                  setActiveMemberMenu(null);
+                                  setShowTransferConfirm(m);
+                                }}
+                                className="w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-semibold text-amber-400 hover:bg-amber-500/15 flex items-center gap-2 transition-all"
+                              >
+                                <Crown size={13} /> Promote to Leader
+                              </button>
+
+                              <button
+                                onClick={() => {
+                                  setActiveMemberMenu(null);
+                                  handleRemoveMember(m);
+                                }}
+                                className="w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-semibold text-red-400 hover:bg-red-500/15 flex items-center gap-2 transition-all"
+                              >
+                                <X size={13} /> Remove Member
+                              </button>
+                            </>
+                          )}
+
+                          <button
+                            onClick={() => {
+                              setActiveMemberMenu(null);
+                              showToast(`${m.full_name ?? 'Student'} • ${m.email || 'No email'}`);
+                            }}
+                            className="w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-semibold text-slate-300 hover:bg-white/10 flex items-center gap-2 transition-all"
+                          >
+                            <UserCheck size={13} /> View Details
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </motion.div>
                 );
               }
@@ -1327,15 +1381,15 @@ export default function ActiveTeamView({ currentUser, supabaseUserId, team: init
               return (
                 <div
                   key={`empty-card-${idx}`}
-                  className="p-2.5 rounded-xl border-2 border-dashed flex flex-col items-center justify-center gap-1 text-center min-h-[96px] sm:min-h-[105px] opacity-60 hover:opacity-80 transition-opacity"
+                  className="rounded-2xl p-4 border-2 border-dashed flex flex-col items-center justify-center gap-1 text-center min-h-[110px] opacity-60 hover:opacity-80 transition-opacity"
                   style={{ borderColor: dashBorder(isDark), background: isDark ? 'rgba(255,255,255,0.01)' : 'rgba(0,0,0,0.01)' }}
                 >
-                  <div className="w-7 h-7 rounded-full border flex items-center justify-center" style={{ borderColor: dashBorder(isDark), color: dashText(isDark, true) }}>
-                    <UserPlus size={13} />
+                  <div className="w-8 h-8 rounded-full border flex items-center justify-center" style={{ borderColor: dashBorder(isDark), color: dashText(isDark, true) }}>
+                    <UserPlus size={14} />
                   </div>
                   <div>
-                    <p className="text-[11px] font-semibold" style={{ color: dashText(isDark) }}>Empty Slot</p>
-                    <p className="text-[9px]" style={{ color: dashText(isDark, true) }}>Waiting for Member</p>
+                    <p className="text-xs font-semibold" style={{ color: dashText(isDark) }}>Empty Slot</p>
+                    <p className="text-[10px]" style={{ color: dashText(isDark, true) }}>Waiting for Member</p>
                   </div>
                 </div>
               );

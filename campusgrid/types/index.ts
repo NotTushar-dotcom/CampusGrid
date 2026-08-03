@@ -8,6 +8,7 @@ export interface User {
   full_name: string | null;
   email: string;
   roll_number: string | null;
+  year_of_study?: string | null;
   role: 'student' | 'faculty' | 'faculty_mentor' | 'admin_spoc';
   skills: string[];
   gender?: 'male' | 'female' | null;

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { X, Hash, Tag, CheckCircle, AlertCircle, Plus, User2, User, Edit3, Loader2 } from 'lucide-react';
+import { X, Hash, Tag, CheckCircle, AlertCircle, Plus, User2, User, Edit3, Loader2, BookOpen } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/components/auth/AuthProvider';
 
@@ -21,6 +21,7 @@ export default function EditProfileModal({ isOpen, onClose, onProfileUpdated }: 
 
   const [fullName, setFullName] = useState('');
   const [rollNumber, setRollNumber] = useState('');
+  const [yearOfStudy, setYearOfStudy] = useState('');
   const [gender, setGender] = useState<'male' | 'female' | null>(null);
   const [skills, setSkills] = useState<string[]>([]);
   const [customSkill, setCustomSkill] = useState('');
@@ -33,6 +34,7 @@ export default function EditProfileModal({ isOpen, onClose, onProfileUpdated }: 
     if (profile) {
       setFullName(profile.full_name ?? '');
       setRollNumber(profile.roll_number ?? '');
+      setYearOfStudy((profile as any).year_of_study ?? '');
       setGender((profile as any).gender ?? null);
       setSkills(profile.skills ?? []);
     }
@@ -91,6 +93,7 @@ export default function EditProfileModal({ isOpen, onClose, onProfileUpdated }: 
       .update({
         full_name: cleanedName,
         roll_number: cleanedRoll,
+        year_of_study: yearOfStudy || null,
         gender,
         skills,
       })
@@ -189,6 +192,25 @@ export default function EditProfileModal({ isOpen, onClose, onProfileUpdated }: 
               className="w-full px-4 py-2.5 bg-black/40 border border-white/15 rounded-xl text-sm outline-none focus:border-[#22C55E] transition-colors font-mono"
             />
             <p className="text-[11px] text-slate-500">Only numbers allowed (10-15 digits, e.g. 2200290100001).</p>
+          </div>
+
+          {/* Year of Study */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+              <BookOpen size={13} className="text-[#22C55E]" />
+              Year of Study
+            </label>
+            <select
+              value={yearOfStudy}
+              onChange={(e) => setYearOfStudy(e.target.value)}
+              className="w-full px-4 py-2.5 bg-black/40 border border-white/15 rounded-xl text-sm outline-none focus:border-[#22C55E] transition-colors cursor-pointer text-white"
+            >
+              <option value="" disabled style={{ background: '#0F172A', color: 'rgba(255,255,255,0.4)' }}>Select Year of Study</option>
+              <option value="1st Year" style={{ background: '#0F172A', color: '#FFFFFF' }}>1st Year</option>
+              <option value="2nd Year" style={{ background: '#0F172A', color: '#FFFFFF' }}>2nd Year</option>
+              <option value="3rd Year" style={{ background: '#0F172A', color: '#FFFFFF' }}>3rd Year</option>
+              <option value="4th Year" style={{ background: '#0F172A', color: '#FFFFFF' }}>4th Year</option>
+            </select>
           </div>
 
           {/* Gender */}

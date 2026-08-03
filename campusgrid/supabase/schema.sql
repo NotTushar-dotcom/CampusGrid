@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS public.users (
   full_name        TEXT,
   email            TEXT UNIQUE NOT NULL,
   roll_number      TEXT UNIQUE,
+  year_of_study    TEXT,
   skills           TEXT[] DEFAULT '{}',
   role             TEXT NOT NULL DEFAULT 'student'
                      CHECK (role IN ('student', 'faculty', 'admin_spoc')),
