@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import {
   Mail, Lock, Eye, EyeOff, AlertCircle, CheckCircle,
   User, Hash, GraduationCap, BookOpen, Phone, Tag,
-  ChevronRight, ArrowRight, Loader2, X,
+  ChevronRight, ArrowRight, Loader2, X, Plus,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { IS_SUPABASE_CONFIGURED } from '@/lib/supabase/fallback';
@@ -26,10 +26,7 @@ function validateDomain(email: string): boolean {
 }
 
 const SKILL_OPTIONS = [
-  'React', 'Next.js', 'Node.js', 'Python', 'AI/ML', 'UI/UX Design',
-  'Flutter', 'Java', 'C++', 'Embedded C', 'IoT', 'Blockchain',
-  'Computer Vision', 'Data Science', 'DevOps', 'Arduino', 'Figma',
-  'TypeScript', 'Django', 'FastAPI', 'TensorFlow', 'ROS',
+  'React', 'Python', 'AI/ML', 'Node.js', 'UI/UX Design', 'Java', 'Flutter',
 ];
 
 /** Exact 17 SIH themes as provided */
@@ -130,6 +127,7 @@ export default function RegisterPage() {
   const [rollNumber, setRollNumber] = useState('');
   const [gender, setGender] = useState<'male' | 'female' | null>(null);
   const [skills, setSkills] = useState<string[]>([]);
+  const [customSkill, setCustomSkill] = useState('');
 
   /* Faculty fields */
   const [designation, setDesignation] = useState('');
@@ -150,6 +148,14 @@ export default function RegisterPage() {
   const toggleSkill = (s: string) =>
     setSkills((p) => (p.includes(s) ? p.filter((x) => x !== s) : [...p, s]));
 
+  const addCustomSkill = () => {
+    const trimmed = customSkill.trim();
+    if (trimmed && !skills.includes(trimmed)) {
+      setSkills((prev) => [...prev, trimmed]);
+    }
+    setCustomSkill('');
+  };
+
   const toggleTheme = (t: string) =>
     setSihThemes((p) => (p.includes(t) ? p.filter((x) => x !== t) : [...p, t]));
 
@@ -160,7 +166,22 @@ export default function RegisterPage() {
     if (!selectedRole) { setError('Please select your role.'); return; }
     setError(null);
 
-    if (!validateDomain(email)) {
+    const cleanedName = fullName.trim();
+    if (!cleanedName || cleanedName.length < 2) {
+      setError('Full name must be at least 2 characters.');
+      return;
+    }
+    if (!/^[a-zA-Z\s.-]+$/.test(cleanedName)) {
+      setError('Full name can only contain letters, spaces, dots, and hyphens.');
+      return;
+    }
+
+    const cleanedEmail = email.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanedEmail)) {
+      setError('Please enter a valid email address.');
+      return;
+    }
+    if (!validateDomain(cleanedEmail)) {
       setError(`Only college emails are allowed. Accepted: ${ALLOWED_DOMAINS.join(', ')}`);
       return;
     }
@@ -172,27 +193,45 @@ export default function RegisterPage() {
       setError('Password must be at least 8 characters.');
       return;
     }
-    if (selectedRole === 'student' && !rollNumber.trim()) {
-      setError('Roll number is required for students.');
-      return;
+
+    const cleanedRoll = rollNumber.trim();
+    if (selectedRole === 'student') {
+      if (!cleanedRoll) {
+        setError('Roll number is required for students.');
+        return;
+      }
+      if (!/^\d{10,15}$/.test(cleanedRoll)) {
+        setError('Security error: Roll number must consist strictly of 10 to 15 numeric digits (e.g. 2200290100001).');
+        return;
+      }
+      if (!gender) {
+        setError('Please select your gender (Boy or Girl).');
+        return;
+      }
     }
-    if (selectedRole === 'student' && !gender) {
-      setError('Please select your gender (Boy or Girl).');
-      return;
-    }
-    if (selectedRole === 'faculty' && (!designation.trim() || !department)) {
-      setError('Designation and Department are required for faculty.');
-      return;
+
+    if (selectedRole === 'faculty') {
+      if (!designation.trim() || !department) {
+        setError('Designation and Department are required for faculty.');
+        return;
+      }
+      if (contactNumber.trim()) {
+        const phoneDigits = contactNumber.replace(/\D/g, '');
+        if (phoneDigits.length < 10 || phoneDigits.length > 12) {
+          setError('Contact number must be a valid 10 to 12 digit phone number.');
+          return;
+        }
+      }
     }
 
     setIsLoading(true);
 
     /* 1. Create auth user */
     const { data: authData, error: signupError } = await supabase.auth.signUp({
-      email,
+      email: cleanedEmail,
       password,
       options: {
-        data: { full_name: fullName },
+        data: { full_name: cleanedName },
       },
     });
 
@@ -202,38 +241,54 @@ export default function RegisterPage() {
       return;
     }
 
-    /* 2. Upsert profile into public.users with role + role-specific fields */
-    const profilePayload =
-      selectedRole === 'student'
-        ? {
-            id: authData.user.id,
-            email,
-            full_name: fullName,
-            roll_number: rollNumber.trim(),
-            gender,
-            skills,
-            role: 'student' as const,
-          }
-        : {
-            id: authData.user.id,
-            email,
-            full_name: fullName,
-            role: 'faculty' as const,
-            designation: designation.trim(),
-            department,
-            contact_number: contactNumber.trim(),
-            sih_themes: sihThemes,
-          };
+    /* 2. Upsert profile into role-specific backend tables */
+    if (selectedRole === 'faculty') {
+      const facultyPayload = {
+        id: authData.user.id,
+        email: cleanedEmail,
+        full_name: cleanedName,
+        designation: designation.trim(),
+        department,
+        contact_number: contactNumber.trim(),
+        sih_themes: sihThemes,
+        areas_of_expertise: sihThemes,
+      };
 
-    const { error: profileError } = await supabase.from('users').upsert(profilePayload as any);
+      const { error: profileError } = await supabase
+        .from('faculty_mentors')
+        .upsert(facultyPayload as any);
 
-    setIsLoading(false);
+      if (profileError) {
+        setIsLoading(false);
+        setError(profileError.message);
+        return;
+      }
 
-    if (profileError) {
-      setError(profileError.message);
-      return;
+      // Remove stub user row from public.users created by trigger if it exists
+      await supabase.from('users').delete().eq('id', authData.user.id);
+    } else {
+      const studentPayload = {
+        id: authData.user.id,
+        email: cleanedEmail,
+        full_name: cleanedName,
+        roll_number: cleanedRoll,
+        gender,
+        skills,
+        role: 'student' as const,
+      };
+
+      const { error: profileError } = await supabase
+        .from('users')
+        .upsert(studentPayload as any);
+
+      if (profileError) {
+        setIsLoading(false);
+        setError(profileError.message);
+        return;
+      }
     }
 
+    setIsLoading(false);
     setSuccess(true);
     setTimeout(() => {
       router.push(selectedRole === 'faculty' ? '/dashboard/mentor' : '/dashboard/team');
@@ -513,8 +568,9 @@ export default function RegisterPage() {
                     id="reg-fullname"
                     type="text"
                     required
+                    maxLength={60}
                     value={fullName}
-                    onChange={(e) => setFullName(e.target.value)}
+                    onChange={(e) => setFullName(e.target.value.replace(/[^a-zA-Z\s.-]/g, ''))}
                     placeholder="Your full name"
                     className="w-full pl-9 pr-4 py-2.5 rounded-xl text-sm outline-none transition-all"
                     style={inputStyle}
@@ -534,7 +590,7 @@ export default function RegisterPage() {
                     type="email"
                     required
                     value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    onChange={(e) => setEmail(e.target.value.trim().toLowerCase())}
                     placeholder={`you${ALLOWED_DOMAINS[0]}`}
                     className="w-full pl-9 pr-4 py-2.5 rounded-xl text-sm outline-none transition-all"
                     style={inputStyle}
@@ -614,16 +670,20 @@ export default function RegisterPage() {
                       <input
                         id="reg-roll-number"
                         type="text"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        maxLength={15}
                         required
                         value={rollNumber}
-                        onChange={(e) => setRollNumber(e.target.value)}
+                        onChange={(e) => setRollNumber(e.target.value.replace(/\D/g, '').slice(0, 15))}
                         placeholder="e.g. 2200290100001"
-                        className="w-full pl-9 pr-4 py-2.5 rounded-xl text-sm outline-none transition-all"
+                        className="w-full pl-9 pr-4 py-2.5 rounded-xl text-sm outline-none transition-all font-mono"
                         style={inputStyle}
                         onFocus={onFocus}
                         onBlur={onBlur}
                       />
                     </div>
+                    <p className="text-[11px] mt-1" style={{ color: textSub }}>Only numbers allowed (10-15 digits, e.g. 2200290100001).</p>
                   </div>
 
                   {/* Gender Selection */}
@@ -678,14 +738,89 @@ export default function RegisterPage() {
                   </div>
 
                   {/* Skills */}
-                  <div>
-                    <label className="block text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: textMuted }}>
+                  <div className="space-y-2.5">
+                    <label className="block text-xs font-semibold uppercase tracking-wider" style={{ color: textMuted }}>
                       <Tag size={12} className="inline mr-1.5" />
-                      Your Skills <span className="normal-case font-normal" style={{ color: textSub }}>(select all that apply)</span>
+                      Your Skills
                     </label>
-                    <MultiSelect options={SKILL_OPTIONS} selected={skills} onToggle={toggleSkill} isDark={isDark} />
+
+                    {/* Predefined Pills */}
+                    <div className="flex flex-wrap gap-1.5">
+                      {SKILL_OPTIONS.map((opt) => {
+                        const active = skills.includes(opt);
+                        return (
+                          <button
+                            key={opt}
+                            type="button"
+                            onClick={() => toggleSkill(opt)}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium transition-all duration-150"
+                            style={
+                              active
+                                ? { background: 'rgba(34,197,94,0.15)', border: '1px solid rgba(34,197,94,0.45)', color: '#22C55E' }
+                                : { background: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)', border: `1px solid ${isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}`, color: textMuted }
+                            }
+                          >
+                            {opt}
+                            {active && <X size={10} className="ml-0.5" />}
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {/* Custom Skill Input */}
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={customSkill}
+                        onChange={(e) => setCustomSkill(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            addCustomSkill();
+                          }
+                        }}
+                        placeholder="Type & add custom skill..."
+                        className="flex-1 px-3 py-2 rounded-xl text-xs outline-none transition-all"
+                        style={inputStyle}
+                        onFocus={onFocus}
+                        onBlur={onBlur}
+                      />
+                      <button
+                        type="button"
+                        onClick={addCustomSkill}
+                        disabled={!customSkill.trim()}
+                        className="inline-flex items-center gap-1 px-3 py-2 rounded-xl text-xs font-bold transition-all disabled:opacity-50"
+                        style={{
+                          background: 'rgba(34,197,94,0.15)',
+                          border: '1px solid rgba(34,197,94,0.4)',
+                          color: '#22C55E',
+                        }}
+                      >
+                        <Plus size={13} /> Add
+                      </button>
+                    </div>
+
+                    {/* Selected Badges */}
                     {skills.length > 0 && (
-                      <p className="text-[11px] mt-1.5" style={{ color: '#22C55E' }}>✓ {skills.length} selected</p>
+                      <div className="pt-1 flex flex-wrap gap-1.5 items-center">
+                        <span className="text-[11px] font-semibold" style={{ color: '#22C55E' }}>Selected ({skills.length}):</span>
+                        {skills.map((skill) => (
+                          <span
+                            key={skill}
+                            className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium"
+                            style={{ background: 'rgba(34,197,94,0.15)', border: '1px solid rgba(34,197,94,0.4)', color: '#22C55E' }}
+                          >
+                            {skill}
+                            <button
+                              type="button"
+                              onClick={() => toggleSkill(skill)}
+                              className="hover:opacity-75 ml-0.5"
+                            >
+                              <X size={10} />
+                            </button>
+                          </span>
+                        ))}
+                      </div>
                     )}
                   </div>
                 </>
@@ -733,9 +868,11 @@ export default function RegisterPage() {
                         <input
                           id="reg-contact"
                           type="tel"
+                          inputMode="tel"
+                          maxLength={13}
                           value={contactNumber}
-                          onChange={(e) => setContactNumber(e.target.value)}
-                          placeholder="+91 98765 43210"
+                          onChange={(e) => setContactNumber(e.target.value.replace(/[^\d+]/g, '').slice(0, 13))}
+                          placeholder="+919876543210"
                           className="w-full pl-9 pr-3 py-2.5 rounded-xl text-sm outline-none transition-all"
                           style={inputStyle}
                           onFocus={onFocus}

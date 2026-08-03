@@ -66,9 +66,14 @@ export default function OnboardingForm({ isOpen, onClose }: OnboardingFormProps)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!supabase)         { setError('Not configured'); return; }
-    if (!rollNumber.trim()) { setError('Roll number is required'); return; }
-    if (!gender)            { setError('Please select your gender'); return; }
+    if (!supabase) { setError('Not configured'); return; }
+    const cleanedRoll = rollNumber.trim();
+    if (!cleanedRoll) { setError('Roll number is required'); return; }
+    if (!/^\d{10,15}$/.test(cleanedRoll)) {
+      setError('Security error: Roll number must consist strictly of 10 to 15 numeric digits (e.g. 2200290100001).');
+      return;
+    }
+    if (!gender) { setError('Please select your gender'); return; }
 
     setIsLoading(true);
     setError(null);
@@ -79,7 +84,7 @@ export default function OnboardingForm({ isOpen, onClose }: OnboardingFormProps)
         id:          user.id,
         email:       user.email!,
         full_name:   user.user_metadata?.full_name ?? '',
-        roll_number: rollNumber.trim(),
+        roll_number: cleanedRoll,
         gender,
         skills:      selectedSkills,
       });
@@ -140,12 +145,16 @@ export default function OnboardingForm({ isOpen, onClose }: OnboardingFormProps)
             </label>
             <input
               type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              maxLength={15}
               required
               value={rollNumber}
-              onChange={(e) => setRollNumber(e.target.value)}
+              onChange={(e) => setRollNumber(e.target.value.replace(/\D/g, '').slice(0, 15))}
               placeholder="e.g., 2200290100001"
-              className="w-full px-4 py-2.5 bg-campus-bg border border-campus-border rounded-xl text-white placeholder-campus-mint/30 text-sm focus:outline-none focus:border-campus-primary transition-colors"
+              className="w-full px-4 py-2.5 bg-campus-bg border border-campus-border rounded-xl text-white placeholder-campus-mint/30 text-sm focus:outline-none focus:border-campus-primary transition-colors font-mono"
             />
+            <p className="text-[11px] text-campus-mint/50">Only numbers allowed (10-15 digits, e.g. 2200290100001).</p>
           </div>
 
           {/* Gender */}

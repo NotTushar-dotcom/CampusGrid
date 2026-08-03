@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Search, Hash, Plus, Users, Send, Clock, AlertCircle,
   X, Loader2, Trophy, Check, ChevronRight, Zap, ArrowRight,
+  User, Edit3,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import {
@@ -14,13 +15,14 @@ import {
   dashText,
   dashBorder,
 } from '@/components/dashboard/DashboardThemeContext';
-import type { Team, User, TeamJoinRequest } from '@/types';
+import EditProfileModal from '@/components/profile/EditProfileModal';
+import type { Team, User as UserType, TeamJoinRequest } from '@/types';
 
 /* ─────────────────────────────────────────────── */
 /*  Props / types                                  */
 /* ─────────────────────────────────────────────── */
 interface UnassignedViewProps {
-  currentUser: User | null;
+  currentUser: UserType | null;
   supabaseUserId: string;
   onTeamJoined: (teamData?: Team) => void;
 }
@@ -71,6 +73,7 @@ export default function UnassignedView({ currentUser, supabaseUserId, onTeamJoin
   const supabase = createClient();
 
   const [active, setActive] = useState<CardId>('browse');
+  const [isEditProfileOpen, setIsEditProfileOpen] = useState(false);
 
   /* Browse */
   const [teams, setTeams]             = useState<RecruitingTeam[]>([]);
@@ -428,9 +431,39 @@ export default function UnassignedView({ currentUser, supabaseUserId, onTeamJoin
             Dream Team
           </span>
         </h1>
-        <p className="text-sm" style={{ color: dashText(isDark, true) }}>
+        <p className="text-sm mb-4" style={{ color: dashText(isDark, true) }}>
           You're not in a team yet — browse open teams, join via code, or start your own.
         </p>
+
+        {/* Profile Card & Edit Profile Button */}
+        <div className="inline-flex flex-wrap items-center justify-center gap-2.5 px-4 py-2 rounded-2xl border transition-all"
+          style={{
+            background: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)',
+            borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)',
+          }}>
+          <div className="flex items-center gap-2 text-xs" style={{ color: dashText(isDark) }}>
+            <User size={14} className="text-[#22C55E]" />
+            <span><strong className="font-semibold">{currentUser?.full_name ?? 'Student'}</strong></span>
+            {currentUser?.roll_number && (
+              <span className="font-mono text-[11px] px-2 py-0.5 rounded-md" style={{ background: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)', color: dashText(isDark, true) }}>
+                Roll: {currentUser.roll_number}
+              </span>
+            )}
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setIsEditProfileOpen(true)}
+            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-bold transition-all hover:scale-105 active:scale-95 shadow-sm"
+            style={{
+              background: 'rgba(34,197,94,0.15)',
+              border: '1px solid rgba(34,197,94,0.4)',
+              color: '#22C55E',
+            }}
+          >
+            <Edit3 size={12} /> Edit Profile
+          </button>
+        </div>
       </motion.div>
 
       {/* ── 3 Action Cards ── */}
@@ -568,6 +601,12 @@ export default function UnassignedView({ currentUser, supabaseUserId, onTeamJoin
           />
         )}
       </AnimatePresence>
+
+      {/* Edit Profile Modal */}
+      <EditProfileModal
+        isOpen={isEditProfileOpen}
+        onClose={() => setIsEditProfileOpen(false)}
+      />
     </div>
   );
 }
@@ -738,7 +777,7 @@ function CodePanel({ isDark, joinCode, setJoinCode, onSubmit, loading, error, su
           <input
             type="text"
             value={joinCode}
-            onChange={e => setJoinCode(e.target.value.toUpperCase())}
+            onChange={e => setJoinCode(e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, '').slice(0, 8))}
             placeholder="CG-XXXXX"
             maxLength={8}
             style={{ ...inputStyle(isDark), textAlign: 'center', letterSpacing: '0.2em', fontFamily: 'monospace', fontSize: '18px' }}

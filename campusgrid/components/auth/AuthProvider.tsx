@@ -36,7 +36,45 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     async (userId: string, userEmail?: string) => {
       if (!supabase) return;
 
-      // 1. Primary lookup: by auth uid in public.users
+      // 1. Primary lookup for Faculty Mentors: public.faculty_mentors
+      try {
+        const { data: mentorRow } = await supabase
+          .from('faculty_mentors')
+          .select('*')
+          .eq('id', userId)
+          .maybeSingle();
+
+        const mentorByEmail = !mentorRow && userEmail ? (
+          await supabase
+            .from('faculty_mentors')
+            .select('*')
+            .eq('email', userEmail.toLowerCase())
+            .maybeSingle()
+        ).data : null;
+
+        const activeMentor = mentorRow || mentorByEmail;
+
+        if (activeMentor) {
+          setProfile({
+            id: activeMentor.id,
+            email: activeMentor.email ?? userEmail ?? '',
+            full_name: activeMentor.full_name ?? null,
+            roll_number: null,
+            skills: [],
+            role: 'faculty' as const,
+            designation: activeMentor.designation ?? null,
+            department: activeMentor.department ?? null,
+            contact_number: activeMentor.contact_number ?? null,
+            sih_themes: activeMentor.sih_themes ?? activeMentor.areas_of_expertise ?? [],
+            created_at: activeMentor.created_at,
+          } as User);
+          return;
+        }
+      } catch {
+        // faculty_mentors table check optional fallback
+      }
+
+      // 2. Primary lookup for Students / Admins: public.users
       const { data: profileById } = await supabase
         .from('users')
         .select('*')
@@ -48,7 +86,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      // 2. Fallback: by email in public.users (handles linked OAuth identities)
+      // 3. Fallback by email in public.users
       if (userEmail) {
         const { data: profileByEmail } = await supabase
           .from('users')
@@ -60,35 +98,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setProfile(profileByEmail as User);
           return;
         }
-      }
-
-      // 3. Secondary fallback: check public.faculty_mentors (separate table, if it exists)
-      try {
-        const { data: mentorRow } = await supabase
-          .from('faculty_mentors')
-          .select('*')
-          .eq('id', userId)
-          .maybeSingle();
-
-        if (mentorRow) {
-          // Synthesise a User-compatible profile so the rest of the app works unchanged
-          setProfile({
-            id: mentorRow.id,
-            email: userEmail ?? '',
-            full_name: mentorRow.full_name ?? null,
-            roll_number: null,
-            skills: [],
-            role: 'faculty' as const,
-            designation: mentorRow.designation ?? null,
-            department: mentorRow.department ?? null,
-            contact_number: mentorRow.contact_number ?? null,
-            sih_themes: mentorRow.areas_of_expertise ?? [],
-            created_at: mentorRow.created_at,
-          } as User);
-          return;
-        }
-      } catch {
-        // faculty_mentors table may not exist — silently ignore
       }
 
       setProfile(null);

@@ -91,13 +91,34 @@ function AdminDashboardInner() {
     setFetchingData(true);
 
     try {
-      // 1. Fetch all users
+      // 1. Fetch all users from public.users AND public.faculty_mentors
       const { data: usersData } = await supabase
         .from('users')
         .select('*')
         .order('created_at', { ascending: false });
 
-      const rawUsers = (usersData ?? []) as User[];
+      const { data: mentorsData } = await supabase
+        .from('faculty_mentors')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      const shapedMentors: User[] = (mentorsData ?? []).map((m: any) => ({
+        id: m.id,
+        email: m.email,
+        full_name: m.full_name,
+        roll_number: null,
+        skills: [],
+        role: 'faculty' as const,
+        designation: m.designation,
+        department: m.department,
+        contact_number: m.contact_number,
+        sih_themes: m.sih_themes ?? m.areas_of_expertise ?? [],
+        created_at: m.created_at,
+      }));
+
+      const mentorIds = new Set(shapedMentors.map((m) => m.id));
+      const filteredUsers = (usersData ?? []).filter((u: any) => !mentorIds.has(u.id) && u.role !== 'faculty');
+      const rawUsers = [...filteredUsers, ...shapedMentors];
       setUsersList(rawUsers);
 
       const userMap: Record<string, User> = {};

@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
-import { Users, LogOut, Home, Loader2, Sun, Moon } from 'lucide-react';
+import { Users, LogOut, Home, Loader2, Sun, Moon, Edit3 } from 'lucide-react';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { createClient } from '@/lib/supabase/client';
 import {
@@ -16,6 +16,7 @@ import {
 } from '@/components/dashboard/DashboardThemeContext';
 import UnassignedView from '@/components/team/UnassignedView';
 import ActiveTeamView from '@/components/team/ActiveTeamView';
+import EditProfileModal from '@/components/profile/EditProfileModal';
 import type { Team } from '@/types';
 
 /* ─────────────────────────────────────────────── */
@@ -29,6 +30,7 @@ function TeamDashboardInner() {
 
   const [teamCheckDone, setTeamCheckDone] = useState(false);
   const [activeTeam, setActiveTeam] = useState<Team | null>(null);
+  const [isNavEditProfileOpen, setIsNavEditProfileOpen] = useState(false);
 
   /* ── Auth guard ── */
   useEffect(() => {
@@ -251,6 +253,21 @@ function TeamDashboardInner() {
 
         {/* Right: actions */}
         <div className="flex items-center gap-1.5 sm:gap-2.5 flex-shrink-0">
+          {/* Edit Profile button */}
+          <button
+            onClick={() => setIsNavEditProfileOpen(true)}
+            title="Edit Profile"
+            className="flex items-center gap-1.5 px-2.5 py-2 sm:px-3 sm:py-2 rounded-xl text-xs font-bold transition-all hover:scale-105 active:scale-95 shadow-sm"
+            style={{
+              background: 'rgba(34,197,94,0.15)',
+              border: '1px solid rgba(34,197,94,0.4)',
+              color: '#22C55E',
+            }}
+          >
+            <Edit3 size={14} />
+            <span className="hidden sm:inline">Edit Profile</span>
+          </button>
+
           {/* Theme toggle */}
           <button
             onClick={toggle}
@@ -320,6 +337,12 @@ function TeamDashboardInner() {
           />
         )}
       </div>
+
+      {/* Edit Profile Modal */}
+      <EditProfileModal
+        isOpen={isNavEditProfileOpen}
+        onClose={() => setIsNavEditProfileOpen(false)}
+      />
     </div>
   );
 }
