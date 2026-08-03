@@ -1043,20 +1043,9 @@ export default function ActiveTeamView({ currentUser, supabaseUserId, team: init
 
             {/* Team Title & Creator */}
             <div>
-              <div className="flex items-center gap-3.5">
-                <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight mb-1.5" style={{ color: dashText(isDark) }}>
-                  {team.team_name}
-                </h1>
-                {isLeader && (
-                  <button
-                    onClick={openEditModal}
-                    title="Rename Team"
-                    className="p-1.5 rounded-lg border text-xs text-[#818CF8] bg-indigo-500/10 border-indigo-500/30 hover:bg-indigo-500/20 transition-all mb-1.5"
-                  >
-                    <Edit3 size={15} />
-                  </button>
-                )}
-              </div>
+              <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight mb-1.5" style={{ color: dashText(isDark) }}>
+                {team.team_name}
+              </h1>
               <div className="flex items-center gap-2 text-xs" style={{ color: dashText(isDark, true) }}>
                 <span>Created by <strong style={{ color: dashText(isDark) }}>{leaderName}</strong></span>
                 {isLeader ? (
@@ -1072,13 +1061,13 @@ export default function ActiveTeamView({ currentUser, supabaseUserId, team: init
             </div>
 
             {/* Problem Statement Banner */}
-            <div className="p-3.5 rounded-xl bg-indigo-500/10 border border-indigo-500/25 flex flex-wrap items-center justify-between gap-3">
-              <div className="flex items-center gap-3 min-w-0 flex-1">
+            {team.problem_statement_id && (
+              <div className="p-3.5 rounded-xl bg-indigo-500/10 border border-indigo-500/25 flex flex-wrap items-center gap-3">
                 <BookOpen size={16} className="text-[#818CF8] shrink-0" />
                 <div className="min-w-0 flex-1">
                   <p className="text-[10px] font-bold uppercase tracking-widest text-[#818CF8]">SIH Problem Statement</p>
                   <p className="text-xs font-mono font-bold truncate" style={{ color: dashText(isDark) }}>
-                    {team.problem_statement_id ? `${team.problem_statement_id} ${psDetails.title ? `— ${psDetails.title}` : ''}` : 'No Problem Statement Selected Yet'}
+                    {team.problem_statement_id} {psDetails.title ? `— ${psDetails.title}` : ''}
                   </p>
                 </div>
                 {psDetails.category && (
@@ -1087,15 +1076,7 @@ export default function ActiveTeamView({ currentUser, supabaseUserId, team: init
                   </span>
                 )}
               </div>
-              {isLeader && (
-                <button
-                  onClick={openEditModal}
-                  className="px-2.5 py-1 rounded-lg text-xs font-bold bg-[#818CF8]/20 hover:bg-[#818CF8]/30 border border-[#818CF8]/40 text-[#818CF8] flex items-center gap-1 transition-all shrink-0"
-                >
-                  <Edit3 size={12} /> {team.problem_statement_id ? 'Change PS' : '+ Select PS'}
-                </button>
-              )}
-            </div>
+            )}
 
             {/* Overlapping Avatars (6 Slots) & Code Bar */}
             <div className="pt-2 flex flex-wrap items-center justify-between gap-4 border-t" style={{ borderColor: dashBorder(isDark) }}>
@@ -1133,7 +1114,7 @@ export default function ActiveTeamView({ currentUser, supabaseUserId, team: init
                 </div>
               </div>
 
-              {/* Team Code Pill with Copy & Share */}
+              {/* Team Code Pill with Copy */}
               {team.join_code && (
                 <div className="flex items-center gap-2 p-1.5 pl-3.5 rounded-xl border" style={{ background: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)', borderColor: dashBorder(isDark) }}>
                   <div className="flex items-center gap-1.5">
@@ -1146,14 +1127,6 @@ export default function ActiveTeamView({ currentUser, supabaseUserId, team: init
                     className="p-1.5 rounded-lg bg-[#22C55E]/15 hover:bg-[#22C55E]/25 text-[#22C55E] border border-[#22C55E]/30 text-xs font-bold flex items-center gap-1 transition-all"
                   >
                     {codeCopied ? <Check size={13} /> : <Copy size={13} />}
-                  </button>
-                  <button
-                    onClick={shareTeamCode}
-                    title="Share Team Invite"
-                    className="p-1.5 rounded-lg border text-xs font-bold flex items-center gap-1 transition-all"
-                    style={{ background: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)', borderColor: dashBorder(isDark), color: dashText(isDark) }}
-                  >
-                    <Share2 size={13} />
                   </button>
                 </div>
               )}
@@ -1478,29 +1451,7 @@ export default function ActiveTeamView({ currentUser, supabaseUserId, team: init
             transition={{ duration: 0.4, delay: 0.2 }}
             className="space-y-4"
           >
-            {/* Card 1: Share Join Code */}
-            <div className="p-5 space-y-3" style={glassCard(isDark)}>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Zap size={16} className="text-[#22C55E]" />
-                  <h4 className="text-xs font-bold uppercase tracking-wider" style={{ color: dashText(isDark) }}>Share Join Code</h4>
-                </div>
-                <span className="font-mono text-xs font-black text-[#22C55E]">{team.join_code}</span>
-              </div>
-              <p className="text-xs" style={{ color: dashText(isDark, true) }}>
-                Share your 6-character code with students to let them join instantly.
-              </p>
-              <button
-                onClick={copyCode}
-                className="w-full py-2 rounded-xl text-xs font-bold border flex items-center justify-center gap-2 transition-all"
-                style={{ background: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)', borderColor: dashBorder(isDark), color: dashText(isDark) }}
-              >
-                {codeCopied ? <Check size={13} className="text-[#22C55E]" /> : <Copy size={13} />}
-                {codeCopied ? 'Code Copied!' : 'Copy 6-Character Code'}
-              </button>
-            </div>
-
-            {/* Card 2: Find Members (Only for Team Leader) */}
+            {/* Find Members Card (Only for Team Leader) */}
             {isLeader && (
               <div className="p-5 space-y-3" style={glassCard(isDark)}>
                 <div className="flex items-center gap-2">
@@ -2071,40 +2022,6 @@ export default function ActiveTeamView({ currentUser, supabaseUserId, team: init
                       style={{ background: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)', borderColor: dashBorder(isDark), color: dashText(isDark) }}
                     />
                   )}
-                </div>
-
-                {/* 3. Team Status Toggle */}
-                <div className="space-y-1.5">
-                  <label className="font-bold uppercase tracking-wider text-[10px]" style={{ color: dashText(isDark, true) }}>
-                    Recruiting Status
-                  </label>
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setEditStatus('recruiting')}
-                      className={`p-3 rounded-xl border text-xs font-bold transition-all flex items-center justify-center gap-2 ${
-                        editStatus === 'recruiting'
-                          ? 'bg-[#22C55E]/20 border-[#22C55E] text-[#22C55E]'
-                          : 'bg-white/5 border-white/10 text-white/60 hover:bg-white/10'
-                      }`}
-                    >
-                      <span className="w-2 h-2 rounded-full bg-[#22C55E] animate-pulse" />
-                      Recruiting (Open)
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setEditStatus('full')}
-                      className={`p-3 rounded-xl border text-xs font-bold transition-all flex items-center justify-center gap-2 ${
-                        editStatus === 'full'
-                          ? 'bg-blue-500/20 border-blue-500 text-blue-400'
-                          : 'bg-white/5 border-white/10 text-white/60 hover:bg-white/10'
-                      }`}
-                    >
-                      <span className="w-2 h-2 rounded-full bg-blue-500" />
-                      Team Complete (Closed)
-                    </button>
-                  </div>
                 </div>
 
                 {/* 4. Open Roles Manager */}
