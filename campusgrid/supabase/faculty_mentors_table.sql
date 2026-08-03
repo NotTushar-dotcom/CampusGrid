@@ -27,6 +27,7 @@ CREATE TABLE IF NOT EXISTS public.faculty_mentors (
 
 -- Ensure all columns exist on faculty_mentors (fixes column missing errors)
 ALTER TABLE public.faculty_mentors ADD COLUMN IF NOT EXISTS user_id UUID;
+ALTER TABLE public.faculty_mentors ALTER COLUMN user_id DROP NOT NULL;
 ALTER TABLE public.faculty_mentors ADD COLUMN IF NOT EXISTS full_name TEXT;
 ALTER TABLE public.faculty_mentors ADD COLUMN IF NOT EXISTS email TEXT;
 ALTER TABLE public.faculty_mentors ADD COLUMN IF NOT EXISTS designation TEXT;

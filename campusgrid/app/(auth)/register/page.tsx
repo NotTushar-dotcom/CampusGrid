@@ -279,6 +279,7 @@ export default function RegisterPage() {
     if (selectedRole === 'faculty') {
       const facultyPayload = {
         id: userId,
+        user_id: userId,
         email: cleanedEmail,
         full_name: cleanedName,
         designation: designation.trim(),
