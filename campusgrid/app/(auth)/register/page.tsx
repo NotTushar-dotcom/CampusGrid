@@ -231,7 +231,9 @@ export default function RegisterPage() {
 
     setIsLoading(true);
 
-    /* 1. Create auth user */
+    /* 1. Create auth user (or sign in if user already exists in auth.users) */
+    let userId: string | null = null;
+
     const { data: authData, error: signupError } = await supabase.auth.signUp({
       email: cleanedEmail,
       password,
@@ -240,16 +242,41 @@ export default function RegisterPage() {
       },
     });
 
-    if (signupError || !authData.user) {
+    if (authData?.user) {
+      userId = authData.user.id;
+    } else if (signupError) {
+      const errMsg = signupError.message.toLowerCase();
+      if (errMsg.includes('already registered') || errMsg.includes('already exists') || errMsg.includes('user_already_exists')) {
+        // User already exists in auth.users — attempt sign-in to heal/upsert profile
+        const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+          email: cleanedEmail,
+          password,
+        });
+
+        if (signInData?.user) {
+          userId = signInData.user.id;
+        } else {
+          setIsLoading(false);
+          setError('This email is already registered. Please sign in to your existing account or reset your password.');
+          return;
+        }
+      } else {
+        setIsLoading(false);
+        setError(signupError.message);
+        return;
+      }
+    }
+
+    if (!userId) {
       setIsLoading(false);
-      setError(signupError?.message ?? 'Signup failed. Please try again.');
+      setError('Registration failed to resolve user ID.');
       return;
     }
 
     /* 2. Upsert profile into role-specific backend tables */
     if (selectedRole === 'faculty') {
       const facultyPayload = {
-        id: authData.user.id,
+        id: userId,
         email: cleanedEmail,
         full_name: cleanedName,
         designation: designation.trim(),
@@ -259,21 +286,33 @@ export default function RegisterPage() {
         areas_of_expertise: sihThemes,
       };
 
+      // 2a. Upsert into public.faculty_mentors
       const { error: profileError } = await supabase
         .from('faculty_mentors')
         .upsert(facultyPayload as any);
 
       if (profileError) {
         setIsLoading(false);
-        setError(profileError.message);
+        setError(`Faculty Mentor DB insert failed: ${profileError.message}`);
         return;
       }
 
-      // Remove stub user row from public.users created by trigger if it exists
-      await supabase.from('users').delete().eq('id', authData.user.id);
+      // 2b. Sync into public.users with role 'faculty'
+      const userFacultyPayload = {
+        id: userId,
+        email: cleanedEmail,
+        full_name: cleanedName,
+        role: 'faculty' as const,
+        designation: designation.trim(),
+        department,
+        contact_number: contactNumber.trim(),
+        sih_themes: sihThemes,
+      };
+
+      await supabase.from('users').upsert(userFacultyPayload as any);
     } else {
       const studentPayload = {
-        id: authData.user.id,
+        id: userId,
         email: cleanedEmail,
         full_name: cleanedName,
         roll_number: cleanedRoll,
