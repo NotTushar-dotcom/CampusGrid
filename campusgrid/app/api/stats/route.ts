@@ -1,12 +1,13 @@
 import { NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase/server';
 import { createClient } from '@supabase/supabase-js';
+import { IS_SUPABASE_CONFIGURED, supabaseUrl, supabaseAnonKey } from '@/lib/supabase/fallback';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 export async function GET() {
-  if (!supabaseUrl || !supabaseAnonKey || supabaseUrl === 'your_supabase_project_url_here') {
+  if (!IS_SUPABASE_CONFIGURED) {
     return NextResponse.json({
       studentRegistrations: 0,
       teamsFormed: 0,
