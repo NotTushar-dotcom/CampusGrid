@@ -277,6 +277,29 @@ export default function RegisterPage() {
 
     /* 2. Upsert profile into role-specific backend tables */
     if (selectedRole === 'faculty') {
+      // 2a. Sync into public.users with role 'faculty' FIRST (satisfies FK constraints on faculty_mentors)
+      const userFacultyPayload = {
+        id: userId,
+        email: cleanedEmail,
+        full_name: cleanedName,
+        role: 'faculty' as const,
+        designation: designation.trim(),
+        department,
+        contact_number: contactNumber.trim(),
+        sih_themes: sihThemes,
+      };
+
+      const { error: userError } = await supabase
+        .from('users')
+        .upsert(userFacultyPayload as any);
+
+      if (userError) {
+        setIsLoading(false);
+        setError(`Faculty User DB insert failed: ${userError.message}`);
+        return;
+      }
+
+      // 2b. Upsert into public.faculty_mentors SECOND
       const facultyPayload = {
         id: userId,
         user_id: userId,
@@ -289,7 +312,6 @@ export default function RegisterPage() {
         areas_of_expertise: sihThemes,
       };
 
-      // 2a. Upsert into public.faculty_mentors
       const { error: profileError } = await supabase
         .from('faculty_mentors')
         .upsert(facultyPayload as any);
@@ -299,20 +321,6 @@ export default function RegisterPage() {
         setError(`Faculty Mentor DB insert failed: ${profileError.message}`);
         return;
       }
-
-      // 2b. Sync into public.users with role 'faculty'
-      const userFacultyPayload = {
-        id: userId,
-        email: cleanedEmail,
-        full_name: cleanedName,
-        role: 'faculty' as const,
-        designation: designation.trim(),
-        department,
-        contact_number: contactNumber.trim(),
-        sih_themes: sihThemes,
-      };
-
-      await supabase.from('users').upsert(userFacultyPayload as any);
     } else {
       const studentPayload = {
         id: userId,

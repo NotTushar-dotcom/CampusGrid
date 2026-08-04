@@ -36,6 +36,19 @@ ALTER TABLE public.faculty_mentors ADD COLUMN IF NOT EXISTS contact_number TEXT;
 ALTER TABLE public.faculty_mentors ADD COLUMN IF NOT EXISTS sih_themes TEXT[] DEFAULT '{}';
 ALTER TABLE public.faculty_mentors ADD COLUMN IF NOT EXISTS areas_of_expertise TEXT[] DEFAULT '{}';
 
+-- Ensure foreign key constraint on user_id safely references public.users(id)
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.table_constraints 
+    WHERE constraint_name = 'faculty_mentors_user_id_fkey'
+  ) THEN
+    ALTER TABLE public.faculty_mentors
+      ADD CONSTRAINT faculty_mentors_user_id_fkey
+      FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+  END IF;
+END $$;
+
 -- Enable Row Level Security (RLS)
 ALTER TABLE public.faculty_mentors ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
