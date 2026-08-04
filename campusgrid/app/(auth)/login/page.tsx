@@ -38,7 +38,7 @@ const VALUE_PROPS = [
   {
     icon: Shield,
     title: 'Campus Nomination',
-    desc: 'Top 30 teams earn IIC-backed national SIH spots.',
+    desc: 'Top 50 teams earn IIC-backed national SIH spots.',
   },
 ];
 
@@ -100,7 +100,7 @@ export default function LoginPage() {
       const role = (existingProfile?.role ?? 'student') as User['role'];
       router.replace(getRoleRedirect(role));
     });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
 
