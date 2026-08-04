@@ -88,26 +88,46 @@ SET search_path = public
 AS $$
 DECLARE
   target_id UUID;
+  target_name TEXT;
+  target_email TEXT;
 BEGIN
   target_id := COALESCE(NEW.id, NEW.user_id);
   IF target_id IS NULL THEN
     RETURN NEW;
   END IF;
 
-  -- Insert stub row into public.users if not exists
-  INSERT INTO public.users (id, role)
-  VALUES (target_id, 'faculty')
-  ON CONFLICT (id) DO UPDATE SET role = 'faculty';
+  target_name  := COALESCE(NULLIF(NEW.full_name, ''), 'Faculty Member');
+  target_email := COALESCE(NULLIF(NEW.email, ''), target_id::text || '@campusgrid.local');
 
-  -- Update all profile fields
-  UPDATE public.users SET
-    full_name      = COALESCE(NEW.full_name, full_name),
-    email          = COALESCE(NEW.email, email),
-    designation    = COALESCE(NEW.designation, designation),
-    department     = COALESCE(NEW.department, department),
-    contact_number = COALESCE(NEW.contact_number, contact_number),
-    sih_themes     = COALESCE(NEW.sih_themes, sih_themes)
-  WHERE id = target_id;
+  -- Upsert full row into public.users with full_name and email to prevent NOT NULL errors
+  INSERT INTO public.users (
+    id,
+    email,
+    full_name,
+    role,
+    designation,
+    department,
+    contact_number,
+    sih_themes
+  )
+  VALUES (
+    target_id,
+    target_email,
+    target_name,
+    'faculty',
+    NEW.designation,
+    NEW.department,
+    NEW.contact_number,
+    COALESCE(NEW.sih_themes, '{}')
+  )
+  ON CONFLICT (id) DO UPDATE SET
+    role           = 'faculty',
+    full_name      = CASE WHEN EXCLUDED.full_name <> 'Faculty Member' THEN EXCLUDED.full_name ELSE users.full_name END,
+    email          = CASE WHEN EXCLUDED.email NOT LIKE '%@campusgrid.local' THEN EXCLUDED.email ELSE users.email END,
+    designation    = COALESCE(EXCLUDED.designation, users.designation),
+    department     = COALESCE(EXCLUDED.department, users.department),
+    contact_number = COALESCE(EXCLUDED.contact_number, users.contact_number),
+    sih_themes     = COALESCE(EXCLUDED.sih_themes, users.sih_themes);
 
   RETURN NEW;
 END;
@@ -120,8 +140,12 @@ CREATE TRIGGER on_faculty_mentor_upsert
   EXECUTE FUNCTION public.sync_faculty_to_users();
 
 -- 5. Backfill/Sync any existing rows from faculty_mentors into public.users
-INSERT INTO public.users (id, role)
-SELECT COALESCE(id, user_id), 'faculty'
+INSERT INTO public.users (id, email, full_name, role)
+SELECT 
+  COALESCE(id, user_id), 
+  COALESCE(email, COALESCE(id, user_id)::text || '@campusgrid.local'),
+  COALESCE(full_name, 'Faculty Member'),
+  'faculty'
 FROM public.faculty_mentors
 WHERE COALESCE(id, user_id) IS NOT NULL
 ON CONFLICT (id) DO UPDATE SET role = 'faculty';

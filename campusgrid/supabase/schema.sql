@@ -292,19 +292,47 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public
 AS $$
+DECLARE
+  target_id UUID;
+  target_name TEXT;
+  target_email TEXT;
 BEGIN
-  INSERT INTO public.users (id, role)
-  VALUES (NEW.id, 'faculty')
-  ON CONFLICT (id) DO UPDATE SET role = 'faculty';
+  target_id := COALESCE(NEW.id, NEW.user_id);
+  IF target_id IS NULL THEN
+    RETURN NEW;
+  END IF;
 
-  UPDATE public.users SET
-    full_name      = NEW.full_name,
-    email          = NEW.email,
-    designation    = NEW.designation,
-    department     = NEW.department,
-    contact_number = NEW.contact_number,
-    sih_themes     = NEW.sih_themes
-  WHERE id = NEW.id;
+  target_name  := COALESCE(NULLIF(NEW.full_name, ''), 'Faculty Member');
+  target_email := COALESCE(NULLIF(NEW.email, ''), target_id::text || '@campusgrid.local');
+
+  INSERT INTO public.users (
+    id,
+    email,
+    full_name,
+    role,
+    designation,
+    department,
+    contact_number,
+    sih_themes
+  )
+  VALUES (
+    target_id,
+    target_email,
+    target_name,
+    'faculty',
+    NEW.designation,
+    NEW.department,
+    NEW.contact_number,
+    COALESCE(NEW.sih_themes, '{}')
+  )
+  ON CONFLICT (id) DO UPDATE SET
+    role           = 'faculty',
+    full_name      = CASE WHEN EXCLUDED.full_name <> 'Faculty Member' THEN EXCLUDED.full_name ELSE users.full_name END,
+    email          = CASE WHEN EXCLUDED.email NOT LIKE '%@campusgrid.local' THEN EXCLUDED.email ELSE users.email END,
+    designation    = COALESCE(EXCLUDED.designation, users.designation),
+    department     = COALESCE(EXCLUDED.department, users.department),
+    contact_number = COALESCE(EXCLUDED.contact_number, users.contact_number),
+    sih_themes     = COALESCE(EXCLUDED.sih_themes, users.sih_themes);
 
   RETURN NEW;
 END;
