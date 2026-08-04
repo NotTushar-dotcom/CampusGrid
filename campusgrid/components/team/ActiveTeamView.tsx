@@ -394,17 +394,25 @@ export default function ActiveTeamView({ currentUser, supabaseUserId, team: init
     setMembersLoading(true);
 
     // 1. Fetch rows from team_members
-    const { data: rawTeamMembers } = await supabase
+    const { data: rawTeamMembers, error: tmErr } = await supabase
       .from('team_members')
       .select('*')
       .eq('team_id', team.id);
 
+    if (tmErr) {
+      console.error('[loadMembers] Error fetching team_members:', tmErr.message);
+    }
+
     // 2. Fetch accepted join requests for this team (failsafe for accepted applicants)
-    const { data: rawAcceptedRequests } = await supabase
+    const { data: rawAcceptedRequests, error: reqErr } = await supabase
       .from('team_join_requests')
       .select('*')
       .eq('team_id', team.id)
       .eq('status', 'accepted');
+
+    if (reqErr) {
+      console.error('[loadMembers] Error fetching accepted requests:', reqErr.message);
+    }
 
     const memberRows = rawTeamMembers ?? [];
     const acceptedRequests = rawAcceptedRequests ?? [];
@@ -452,7 +460,7 @@ export default function ActiveTeamView({ currentUser, supabaseUserId, team: init
       const alreadyIn = mappedMembers.some((m) => m.user_id === req.applicant_id);
       if (!alreadyIn) {
         const uProfile = userProfilesMap[req.applicant_id];
-        mappedMembers.push({
+        const newMem: MemberRow = {
           id: req.id,
           user_id: req.applicant_id,
           role_in_team: 'Member',
@@ -462,19 +470,23 @@ export default function ActiveTeamView({ currentUser, supabaseUserId, team: init
           year_of_study: uProfile?.year_of_study ?? null,
           gender: uProfile?.gender ?? null,
           skills: uProfile?.skills ?? [],
-        });
+        };
+        mappedMembers.push(newMem);
 
         // Sync to team_members in DB as background healing
-        try {
-          await supabase.from('team_members').insert({
+        supabase.from('team_members').upsert(
+          {
             team_id: team.id,
             user_id: req.applicant_id,
             role_in_team: 'Member',
-            full_name: uProfile?.full_name ?? null,
-            email: uProfile?.email ?? null,
-            roll_number: uProfile?.roll_number ?? null,
-          });
-        } catch { /* ignore if constraint exists */ }
+            full_name: newMem.full_name,
+            email: newMem.email,
+            roll_number: newMem.roll_number,
+          },
+          { onConflict: 'team_id,user_id' }
+        ).then(({ error }) => {
+          if (error) console.error('[loadMembers] Auto-heal team_member failed:', error.message);
+        });
       }
     }
 
@@ -495,16 +507,19 @@ export default function ActiveTeamView({ currentUser, supabaseUserId, team: init
       };
       mappedMembers.unshift(leaderInfo);
 
-      try {
-        await supabase.from('team_members').insert({
+      supabase.from('team_members').upsert(
+        {
           team_id: team.id,
           user_id: team.leader_id,
           role_in_team: 'Leader',
           full_name: leaderInfo.full_name,
           email: leaderInfo.email,
           roll_number: leaderInfo.roll_number,
-        });
-      } catch { /* ignore */ }
+        },
+        { onConflict: 'team_id,user_id' }
+      ).then(({ error }) => {
+        if (error) console.error('[loadMembers] Auto-heal leader team_member failed:', error.message);
+      });
     }
 
     // 7. Sort: Leader first, then members
@@ -826,22 +841,31 @@ export default function ActiveTeamView({ currentUser, supabaseUserId, team: init
     setProcessing(req.id);
 
     // 1. Mark request as accepted directly
-    await supabase
+    const { error: reqErr } = await supabase
       .from('team_join_requests')
       .update({ status: 'accepted' })
       .eq('id', req.id);
 
-    // 2. Insert member into team_members directly
-    try {
-      await supabase.from('team_members').insert({
+    if (reqErr) {
+      console.error('[handleAccept] Request update error:', reqErr.message);
+    }
+
+    // 2. Upsert member into team_members directly
+    const { error: tmErr } = await supabase.from('team_members').upsert(
+      {
         team_id: team.id,
         user_id: req.applicant_id,
         role_in_team: 'Member',
         full_name: req.applicant_name,
         email: req.applicant_email,
         roll_number: req.applicant_roll,
-      });
-    } catch { /* ignore if constraint exists */ }
+      },
+      { onConflict: 'team_id,user_id' }
+    );
+
+    if (tmErr) {
+      console.error('[handleAccept] team_members upsert error:', tmErr.message);
+    }
 
     // 3. Trigger RPC for team capacity checks
     try {

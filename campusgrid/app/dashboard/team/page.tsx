@@ -93,16 +93,21 @@ function TeamDashboardInner() {
 
         if (teamData) {
           // Auto-heal team_members in DB
-          try {
-            await supabase.from('team_members').insert({
+          const { error: healErr } = await supabase.from('team_members').upsert(
+            {
               team_id: joinReqRow.team_id,
               user_id: user.id,
               role_in_team: 'Member',
               full_name: profile?.full_name ?? null,
               email: profile?.email ?? null,
               roll_number: profile?.roll_number ?? null,
-            });
-          } catch { /* ignore */ }
+            },
+            { onConflict: 'team_id,user_id' }
+          );
+
+          if (healErr) {
+            console.error('[checkTeamMembership] Auto-heal member error:', healErr.message);
+          }
 
           setActiveTeam(teamData as any);
           setTeamCheckDone(true);
@@ -122,16 +127,21 @@ function TeamDashboardInner() {
 
       if (leadTeam) {
         // Auto-heal team_members for leader
-        try {
-          await supabase.from('team_members').insert({
+        const { error: healLeaderErr } = await supabase.from('team_members').upsert(
+          {
             team_id: leadTeam.id,
             user_id: user.id,
             role_in_team: 'Team Leader',
             full_name: profile?.full_name ?? null,
             email: profile?.email ?? null,
             roll_number: profile?.roll_number ?? null,
-          });
-        } catch { /* ignore */ }
+          },
+          { onConflict: 'team_id,user_id' }
+        );
+
+        if (healLeaderErr) {
+          console.error('[checkTeamMembership] Auto-heal leader error:', healLeaderErr.message);
+        }
 
         setActiveTeam(leadTeam as any);
         setTeamCheckDone(true);

@@ -288,17 +288,22 @@ export default function UnassignedView({ currentUser, supabaseUserId, onTeamJoin
       return;
     }
 
-    // Best-effort: also insert into team_members directly (may fail due to RLS — that's OK)
-    try {
-      await supabase.from('team_members').insert({
+    // Best-effort: also upsert into team_members directly
+    const { error: tmErr } = await supabase.from('team_members').upsert(
+      {
         team_id: team.id,
         user_id: supabaseUserId,
         role_in_team: 'Member',
         full_name: currentUser?.full_name ?? null,
         email: currentUser?.email ?? null,
         roll_number: currentUser?.roll_number ?? null,
-      });
-    } catch { /* RLS may block this — checkTeamMembership will handle it via join_requests fallback */ }
+      },
+      { onConflict: 'team_id,user_id' }
+    );
+
+    if (tmErr) {
+      console.error('[handleJoinByCode] team_members upsert error:', tmErr.message);
+    }
 
     setJoinSuccess(`Joined "${team.team_name}" successfully!`);
     setJoinLoading(false);
@@ -691,138 +696,95 @@ function BrowsePanel({
   }
 
   return (
-    <motion.div variants={panelVariants} initial="hidden" animate="show" exit="exit" className="space-y-4">
-      {/* Real-time live header indicator */}
-      <div className="flex items-center justify-between px-1 mb-1">
-        <div className="flex items-center gap-2 text-xs font-semibold" style={{ color: dashText(isDark) }}>
-          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_8px_#22C55E]" />
-          <span className="bg-clip-text text-transparent bg-gradient-to-r from-emerald-400 to-teal-400 font-bold">
-            Live Roster & Availability
-          </span>
-        </div>
-        <span className="text-[11px] font-medium px-2 py-0.5 rounded-full"
-          style={{ background: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)', color: dashText(isDark, true) }}>
-          {teams.length} {teams.length === 1 ? 'team' : 'teams'} recruiting
-        </span>
-      </div>
+    <motion.div variants={panelVariants} initial="hidden" animate="show" exit="exit"
+      className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      {teams.map((team, i) => {
+        const req = requestForTeam(team.id);
+        const isPending = req?.status === 'pending';
+        const isAccepted = req?.status === 'accepted';
+        const isSending = sendingTo === team.id;
+        const fillPct = Math.round((team.member_count / 6) * 100);
 
-      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {teams.map((team, i) => {
-          const req = requestForTeam(team.id);
-          const isPending = req?.status === 'pending';
-          const isAccepted = req?.status === 'accepted';
-          const isSending = sendingTo === team.id;
-          const spotsLeft = Math.max(0, 6 - team.member_count);
+        return (
+          <motion.div key={team.id}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: i * 0.05 }}
+            className="flex flex-col gap-4 p-5 group"
+            style={glassCard(isDark)}
+            onMouseEnter={e => {
+              (e.currentTarget as HTMLDivElement).style.border = '1px solid rgba(34,197,94,0.45)';
+              (e.currentTarget as HTMLDivElement).style.boxShadow = '0 0 20px rgba(34,197,94,0.12)';
+            }}
+            onMouseLeave={e => {
+              (e.currentTarget as HTMLDivElement).style.border = `1px solid ${isDark ? 'rgba(255,255,255,0.10)' : 'rgba(148,163,184,0.35)'}`;
+              (e.currentTarget as HTMLDivElement).style.boxShadow = isDark ? '0 4px 24px rgba(0,0,0,0.40)' : '0 2px 16px rgba(0,0,0,0.06)';
+            }}
+          >
+            {/* Header */}
+            <div>
+              <div className="flex items-start justify-between gap-2 mb-1">
+                <p className="font-bold text-sm leading-tight" style={{ color: dashText(isDark) }}>{team.team_name}</p>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold flex-shrink-0"
+                  style={{ background: 'rgba(34,197,94,0.12)', color: '#22C55E', border: '1px solid rgba(34,197,94,0.25)' }}>
+                  Recruiting
+                </span>
+              </div>
+              {team.problem_statement_id && (
+                <p className="text-xs font-mono" style={{ color: dashText(isDark, true) }}>PS: {team.problem_statement_id}</p>
+              )}
+              {team.leader_name && (
+                <p className="text-xs mt-0.5" style={{ color: dashText(isDark, true) }}>Leader: {team.leader_name}</p>
+              )}
+            </div>
 
-          return (
-            <motion.div key={team.id}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.05 }}
-              className="flex flex-col gap-4 p-5 group"
-              style={glassCard(isDark)}
-              onMouseEnter={e => {
-                (e.currentTarget as HTMLDivElement).style.border = '1px solid rgba(34,197,94,0.45)';
-                (e.currentTarget as HTMLDivElement).style.boxShadow = '0 0 20px rgba(34,197,94,0.12)';
-              }}
-              onMouseLeave={e => {
-                (e.currentTarget as HTMLDivElement).style.border = `1px solid ${isDark ? 'rgba(255,255,255,0.10)' : 'rgba(148,163,184,0.35)'}`;
-                (e.currentTarget as HTMLDivElement).style.boxShadow = isDark ? '0 4px 24px rgba(0,0,0,0.40)' : '0 2px 16px rgba(0,0,0,0.06)';
-              }}
-            >
-              {/* Header */}
-              <div>
-                <div className="flex items-start justify-between gap-2 mb-1">
-                  <p className="font-bold text-sm leading-tight" style={{ color: dashText(isDark) }}>{team.team_name}</p>
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold flex-shrink-0"
-                    style={{ background: 'rgba(34,197,94,0.12)', color: '#22C55E', border: '1px solid rgba(34,197,94,0.25)' }}>
-                    Recruiting
-                  </span>
-                </div>
-                {team.problem_statement_id && (
-                  <p className="text-xs font-mono" style={{ color: dashText(isDark, true) }}>PS: {team.problem_statement_id}</p>
-                )}
-                {team.leader_name && (
-                  <p className="text-xs mt-0.5" style={{ color: dashText(isDark, true) }}>Leader: {team.leader_name}</p>
+            {/* Member bar */}
+            <div>
+              <div className="flex justify-between mb-1.5">
+                <span className="text-xs" style={{ color: dashText(isDark, true) }}>Members</span>
+                <span className="text-xs font-bold" style={{ color: '#22C55E' }}>{team.member_count}/6</span>
+              </div>
+              <div className="h-1.5 rounded-full overflow-hidden"
+                style={{ background: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)' }}>
+                <div className="h-full rounded-full" style={{
+                  width: `${fillPct}%`,
+                  background: 'linear-gradient(90deg,#22C55E,#10B981)',
+                }} />
+              </div>
+            </div>
+
+            {/* Skills */}
+            {team.open_roles?.length > 0 && (
+              <div className="flex flex-wrap gap-1">
+                {team.open_roles.slice(0, 4).map(r => <Pill key={r} label={r} />)}
+                {team.open_roles.length > 4 && (
+                  <span className="text-[10px]" style={{ color: dashText(isDark, true) }}>+{team.open_roles.length - 4}</span>
                 )}
               </div>
+            )}
 
-              {/* Real-time Member Bar & Spots Left Badge */}
-              <div className="p-3 rounded-xl" style={{
-                background: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)',
-                border: `1px solid ${isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.05)'}`
-              }}>
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-1.5 text-xs font-bold" style={{ color: dashText(isDark) }}>
-                    <Users size={13} className="text-[#22C55E]" />
-                    <span>{team.member_count} / 6 Members</span>
-                  </div>
-                  <span
-                    className="px-2 py-0.5 rounded-md text-[10px] font-extrabold flex items-center gap-1"
-                    style={{
-                      background: spotsLeft <= 1 ? 'rgba(239,68,68,0.15)' : spotsLeft <= 2 ? 'rgba(245,158,11,0.15)' : 'rgba(34,197,94,0.15)',
-                      color: spotsLeft <= 1 ? '#EF4444' : spotsLeft <= 2 ? '#F59E0B' : '#22C55E',
-                      border: `1px solid ${spotsLeft <= 1 ? 'rgba(239,68,68,0.3)' : spotsLeft <= 2 ? 'rgba(245,158,11,0.3)' : 'rgba(34,197,94,0.3)'}`,
-                    }}
-                  >
-                    {spotsLeft === 0 ? 'Full' : `${spotsLeft} spot${spotsLeft === 1 ? '' : 's'} left`}
-                  </span>
-                </div>
-
-                {/* 6 Segment visual capacity indicator */}
-                <div className="flex gap-1.5 h-1.5">
-                  {[...Array(6)].map((_, index) => {
-                    const isFilled = index < team.member_count;
-                    return (
-                      <div
-                        key={index}
-                        className="h-full flex-1 rounded-full transition-all duration-300"
-                        style={{
-                          background: isFilled
-                            ? 'linear-gradient(90deg,#22C55E,#10B981)'
-                            : isDark
-                            ? 'rgba(255,255,255,0.12)'
-                            : 'rgba(0,0,0,0.12)',
-                        }}
-                      />
-                    );
-                  })}
-                </div>
+            {/* CTA */}
+            {isAccepted ? (
+              <div className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold"
+                style={{ background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.2)', color: '#22C55E' }}>
+                <Check size={13} /> Request Accepted
               </div>
-
-              {/* Skills */}
-              {team.open_roles?.length > 0 && (
-                <div className="flex flex-wrap gap-1">
-                  {team.open_roles.slice(0, 4).map(r => <Pill key={r} label={r} />)}
-                  {team.open_roles.length > 4 && (
-                    <span className="text-[10px]" style={{ color: dashText(isDark, true) }}>+{team.open_roles.length - 4}</span>
-                  )}
-                </div>
-              )}
-
-              {/* CTA */}
-              {isAccepted ? (
-                <div className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold"
-                  style={{ background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.2)', color: '#22C55E' }}>
-                  <Check size={13} /> Request Accepted
-                </div>
-              ) : isPending ? (
-                <div className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold"
-                  style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)', color: '#F59E0B' }}>
-                  <Clock size={13} /> Request Sent (Pending)
-                </div>
-              ) : (
-                <button onClick={() => onOpenPitch(team)} disabled={isSending}
-                  className="flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-bold transition-all hover:opacity-90 active:scale-[0.98] disabled:opacity-50"
-                  style={{ background: 'linear-gradient(135deg,#22C55E,#10B981)', color: '#000' }}>
-                  {isSending ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
-                  Send Join Request
-                </button>
-              )}
-            </motion.div>
-          );
-        })}
-      </div>
+            ) : isPending ? (
+              <div className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold"
+                style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)', color: '#F59E0B' }}>
+                <Clock size={13} /> Request Sent (Pending)
+              </div>
+            ) : (
+              <button onClick={() => onOpenPitch(team)} disabled={isSending}
+                className="flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-bold transition-all hover:opacity-90 active:scale-[0.98] disabled:opacity-50"
+                style={{ background: 'linear-gradient(135deg,#22C55E,#10B981)', color: '#000' }}>
+                {isSending ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
+                Send Join Request
+              </button>
+            )}
+          </motion.div>
+        );
+      })}
     </motion.div>
   );
 }
