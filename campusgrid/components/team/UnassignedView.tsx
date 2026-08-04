@@ -113,11 +113,11 @@ export default function UnassignedView({ currentUser, supabaseUserId, onTeamJoin
 
     const { data: reqData } = await supabase
       .from('team_join_requests')
-      .select('*')
+      .select('*, team:teams(team_name)')
       .eq('applicant_id', supabaseUserId)
       .in('status', ['pending', 'accepted']);
 
-    setMyRequests((reqData as TeamJoinRequest[]) ?? []);
+    setMyRequests((reqData as any[]) ?? []);
 
     if (teamsData) {
       const seenNames = new Set<string>();
@@ -217,7 +217,22 @@ export default function UnassignedView({ currentUser, supabaseUserId, onTeamJoin
     setSendSuccess(`Request sent to "${team.team_name}"! Wait for the leader to accept.`);
     setPitchModal(null);
     setPitchMsg('');
-    await loadTeams();
+
+    // Optimistically update myRequests state
+    setMyRequests((prev: any[]) => [
+      ...prev.filter(r => r.team_id !== team.id),
+      {
+        id: `temp-${Date.now()}`,
+        team_id: team.id,
+        applicant_id: supabaseUserId,
+        pitch_message: pitchMsg.trim() || null,
+        status: 'pending',
+        team: { team_name: team.team_name },
+        created_at: new Date().toISOString(),
+      },
+    ]);
+
+    await loadTeams(false);
   }
 
   /* ── Join via code ── */
@@ -590,6 +605,7 @@ export default function UnassignedView({ currentUser, supabaseUserId, onTeamJoin
             isDark={isDark}
             teams={teams}
             loading={teamsLoading}
+            myRequests={myRequests}
             requestForTeam={requestForTeam}
             sendingTo={sendingTo}
             onOpenPitch={(t) => { setPitchModal(t); setPitchMsg(''); }}
@@ -654,11 +670,12 @@ export default function UnassignedView({ currentUser, supabaseUserId, onTeamJoin
 /*  Browse Panel                                   */
 /* ─────────────────────────────────────────────── */
 function BrowsePanel({
-  isDark, teams, loading, requestForTeam, sendingTo, onOpenPitch,
+  isDark, teams, loading, myRequests, requestForTeam, sendingTo, onOpenPitch,
 }: {
   isDark: boolean;
   teams: RecruitingTeam[];
   loading: boolean;
+  myRequests: TeamJoinRequest[];
   requestForTeam: (id: string) => TeamJoinRequest | undefined;
   sendingTo: string | null;
   onOpenPitch: (t: RecruitingTeam) => void;
@@ -695,41 +712,69 @@ function BrowsePanel({
     );
   }
 
-  return (
-    <motion.div variants={panelVariants} initial="hidden" animate="show" exit="exit"
-      className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-      {teams.map((team, i) => {
-        const req = requestForTeam(team.id);
-        const isPending = req?.status === 'pending';
-        const isAccepted = req?.status === 'accepted';
-        const isSending = sendingTo === team.id;
-        const fillPct = Math.round((team.member_count / 6) * 100);
+  const pendingList = (myRequests as any[]).filter(r => r.status === 'pending');
 
-        return (
-          <motion.div key={team.id}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: i * 0.05 }}
-            className="flex flex-col gap-4 p-5 group"
-            style={glassCard(isDark)}
-            onMouseEnter={e => {
-              (e.currentTarget as HTMLDivElement).style.border = '1px solid rgba(34,197,94,0.45)';
-              (e.currentTarget as HTMLDivElement).style.boxShadow = '0 0 20px rgba(34,197,94,0.12)';
-            }}
-            onMouseLeave={e => {
-              (e.currentTarget as HTMLDivElement).style.border = `1px solid ${isDark ? 'rgba(255,255,255,0.10)' : 'rgba(148,163,184,0.35)'}`;
-              (e.currentTarget as HTMLDivElement).style.boxShadow = isDark ? '0 4px 24px rgba(0,0,0,0.40)' : '0 2px 16px rgba(0,0,0,0.06)';
-            }}
-          >
-            {/* Header */}
-            <div>
-              <div className="flex items-start justify-between gap-2 mb-1">
-                <p className="font-bold text-sm leading-tight" style={{ color: dashText(isDark) }}>{team.team_name}</p>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold flex-shrink-0"
-                  style={{ background: 'rgba(34,197,94,0.12)', color: '#22C55E', border: '1px solid rgba(34,197,94,0.25)' }}>
-                  Recruiting
-                </span>
-              </div>
+  return (
+    <motion.div variants={panelVariants} initial="hidden" animate="show" exit="exit" className="space-y-4">
+      {/* Top Banner for Pending Sent Requests */}
+      {pendingList.length > 0 && (
+        <div
+          className="p-3.5 rounded-2xl border flex items-center justify-between gap-3 text-xs font-semibold shadow-sm"
+          style={{
+            background: 'rgba(245,158,11,0.12)',
+            borderColor: 'rgba(245,158,11,0.35)',
+            color: '#F59E0B',
+          }}
+        >
+          <div className="flex items-center gap-2">
+            <Clock size={16} className="shrink-0 animate-pulse" />
+            <span>
+              <strong>Request Sent:</strong> You have a pending join request to <strong>{pendingList.map(r => r.team?.team_name ?? 'the team').join(', ')}</strong>. Waiting for the team leader to accept.
+            </span>
+          </div>
+        </div>
+      )}
+
+      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {teams.map((team, i) => {
+          const req = requestForTeam(team.id);
+          const isPending = req?.status === 'pending';
+          const isAccepted = req?.status === 'accepted';
+          const isSending = sendingTo === team.id;
+          const fillPct = Math.round((team.member_count / 6) * 100);
+
+          return (
+            <motion.div key={team.id}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: i * 0.05 }}
+              className="flex flex-col gap-4 p-5 group"
+              style={glassCard(isDark)}
+              onMouseEnter={e => {
+                (e.currentTarget as HTMLDivElement).style.border = '1px solid rgba(34,197,94,0.45)';
+                (e.currentTarget as HTMLDivElement).style.boxShadow = '0 0 20px rgba(34,197,94,0.12)';
+              }}
+              onMouseLeave={e => {
+                (e.currentTarget as HTMLDivElement).style.border = `1px solid ${isDark ? 'rgba(255,255,255,0.10)' : 'rgba(148,163,184,0.35)'}`;
+                (e.currentTarget as HTMLDivElement).style.boxShadow = isDark ? '0 4px 24px rgba(0,0,0,0.40)' : '0 2px 16px rgba(0,0,0,0.06)';
+              }}
+            >
+              {/* Header */}
+              <div>
+                <div className="flex items-start justify-between gap-2 mb-1">
+                  <p className="font-bold text-sm leading-tight" style={{ color: dashText(isDark) }}>{team.team_name}</p>
+                  {isPending ? (
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold flex-shrink-0 animate-pulse"
+                      style={{ background: 'rgba(245,158,11,0.15)', color: '#F59E0B', border: '1px solid rgba(245,158,11,0.35)' }}>
+                      Request Sent
+                    </span>
+                  ) : (
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold flex-shrink-0"
+                      style={{ background: 'rgba(34,197,94,0.12)', color: '#22C55E', border: '1px solid rgba(34,197,94,0.25)' }}>
+                      Recruiting
+                    </span>
+                  )}
+                </div>
               {team.problem_statement_id && (
                 <p className="text-xs font-mono" style={{ color: dashText(isDark, true) }}>PS: {team.problem_statement_id}</p>
               )}
@@ -785,6 +830,7 @@ function BrowsePanel({
           </motion.div>
         );
       })}
+      </div>
     </motion.div>
   );
 }

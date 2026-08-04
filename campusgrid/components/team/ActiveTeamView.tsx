@@ -923,8 +923,26 @@ export default function ActiveTeamView({ currentUser, supabaseUserId, team: init
         console.warn('[Leave Team] team_join_requests delete error:', reqErr);
       }
 
-      // 3. Re-open team status if it was previously full
-      if (team.status === 'full') {
+      // 3. If leaving user was leader of the team, assign new leader or delete empty team
+      if (team.leader_id === supabaseUserId) {
+        const { data: remainingMembers } = await supabase
+          .from('team_members')
+          .select('user_id')
+          .eq('team_id', team.id)
+          .neq('user_id', supabaseUserId)
+          .limit(1);
+
+        if (remainingMembers && remainingMembers.length > 0) {
+          await supabase
+            .from('teams')
+            .update({ leader_id: remainingMembers[0].user_id, status: 'recruiting' })
+            .eq('id', team.id);
+        } else {
+          // No members left — disband empty team
+          await supabase.from('teams').delete().eq('id', team.id);
+        }
+      } else if (team.status === 'full') {
+        // Re-open team status if it was previously full
         await supabase
           .from('teams')
           .update({ status: 'recruiting' })

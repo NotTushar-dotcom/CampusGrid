@@ -126,26 +126,35 @@ function TeamDashboardInner() {
         .maybeSingle();
 
       if (leadTeam) {
-        // Auto-heal team_members for leader
-        const { error: healLeaderErr } = await supabase.from('team_members').upsert(
-          {
-            team_id: leadTeam.id,
-            user_id: user.id,
-            role_in_team: 'Team Leader',
-            full_name: profile?.full_name ?? null,
-            email: profile?.email ?? null,
-            roll_number: profile?.roll_number ?? null,
-          },
-          { onConflict: 'team_id,user_id' }
-        );
+        // Verify user is actually still present in team_members or newly created
+        const { count: tmCount } = await supabase
+          .from('team_members')
+          .select('*', { count: 'exact', head: true })
+          .eq('team_id', leadTeam.id)
+          .eq('user_id', user.id);
 
-        if (healLeaderErr) {
-          console.error('[checkTeamMembership] Auto-heal leader error:', healLeaderErr.message);
+        // Only auto-heal if user hasn't abandoned/left the team
+        if ((tmCount ?? 0) > 0) {
+          const { error: healLeaderErr } = await supabase.from('team_members').upsert(
+            {
+              team_id: leadTeam.id,
+              user_id: user.id,
+              role_in_team: 'Team Leader',
+              full_name: profile?.full_name ?? null,
+              email: profile?.email ?? null,
+              roll_number: profile?.roll_number ?? null,
+            },
+            { onConflict: 'team_id,user_id' }
+          );
+
+          if (healLeaderErr) {
+            console.error('[checkTeamMembership] Auto-heal leader error:', healLeaderErr.message);
+          }
+
+          setActiveTeam(leadTeam as any);
+          setTeamCheckDone(true);
+          return;
         }
-
-        setActiveTeam(leadTeam as any);
-        setTeamCheckDone(true);
-        return;
       }
 
       setActiveTeam(null);

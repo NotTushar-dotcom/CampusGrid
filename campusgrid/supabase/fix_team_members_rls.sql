@@ -1,7 +1,25 @@
--- ============================================================
--- CAMPUSGRID DATABASE MIGRATION: Team Members & Join Requests Visibility (RLS)
--- Run this script in: Supabase Dashboard > SQL Editor > Run
--- ============================================================
+-- 0. Ensure teams table allows delete and update by leader
+ALTER TABLE public.teams ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Teams: delete by leader" ON public.teams;
+CREATE POLICY "Teams: delete by leader"
+  ON public.teams FOR DELETE
+  TO authenticated
+  USING (leader_id = auth.uid());
+
+DROP POLICY IF EXISTS "Teams: update by leader or member" ON public.teams;
+DROP POLICY IF EXISTS "Teams: update by leader" ON public.teams;
+CREATE POLICY "Teams: update by leader or member"
+  ON public.teams FOR UPDATE
+  TO authenticated
+  USING (
+    leader_id = auth.uid()
+    OR
+    EXISTS (
+      SELECT 1 FROM public.team_members
+      WHERE team_id = teams.id AND user_id = auth.uid()
+    )
+  );
 
 -- 1. Ensure team_members table has RLS enabled
 ALTER TABLE public.team_members ENABLE ROW LEVEL SECURITY;
@@ -63,7 +81,7 @@ CREATE POLICY "TeamMembers: delete self or leader"
     )
   );
 
--- 6. Ensure team_join_requests allows team members to view accepted requests for their team
+-- 6. Ensure team_join_requests RLS policies permit select, insert, update, and delete
 ALTER TABLE public.team_join_requests ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "JoinRequests: select own or team member" ON public.team_join_requests;
@@ -91,6 +109,43 @@ CREATE POLICY "JoinRequests: select own or team member"
       WHERE tjr.team_id = team_join_requests.team_id 
         AND tjr.applicant_id = auth.uid() 
         AND tjr.status = 'accepted'
+    )
+  );
+
+DROP POLICY IF EXISTS "JoinRequests: insert own" ON public.team_join_requests;
+CREATE POLICY "JoinRequests: insert own"
+  ON public.team_join_requests FOR INSERT
+  TO authenticated
+  WITH CHECK (applicant_id = auth.uid());
+
+DROP POLICY IF EXISTS "JoinRequests: update as leader or applicant" ON public.team_join_requests;
+DROP POLICY IF EXISTS "JoinRequests: update as leader" ON public.team_join_requests;
+DROP POLICY IF EXISTS "JoinRequests: update own as applicant" ON public.team_join_requests;
+
+CREATE POLICY "JoinRequests: update as leader or applicant"
+  ON public.team_join_requests FOR UPDATE
+  TO authenticated
+  USING (
+    applicant_id = auth.uid()
+    OR
+    EXISTS (
+      SELECT 1 FROM public.teams
+      WHERE id = team_join_requests.team_id AND leader_id = auth.uid()
+    )
+  );
+
+DROP POLICY IF EXISTS "JoinRequests: delete own or leader" ON public.team_join_requests;
+DROP POLICY IF EXISTS "JoinRequests: delete own" ON public.team_join_requests;
+
+CREATE POLICY "JoinRequests: delete own or leader"
+  ON public.team_join_requests FOR DELETE
+  TO authenticated
+  USING (
+    applicant_id = auth.uid()
+    OR
+    EXISTS (
+      SELECT 1 FROM public.teams
+      WHERE id = team_join_requests.team_id AND leader_id = auth.uid()
     )
   );
 
