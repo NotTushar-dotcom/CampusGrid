@@ -1082,7 +1082,7 @@ export default function ActiveTeamView({ currentUser, supabaseUserId, team: init
                     <Crown size={10} /> 🏆 Team Leader
                   </span>
                 ) : (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-white/5 border border-white/10 text-white/70">
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-[#22C55E]/15 border border-[#22C55E]/35 text-[#22C55E]">
                     Team Member
                   </span>
                 )}
@@ -1292,7 +1292,7 @@ export default function ActiveTeamView({ currentUser, supabaseUserId, team: init
                       <div className="min-w-0 flex-1 space-y-0.5 sm:space-y-1">
                         {/* Row 1: Full Name + (Leader) Badge */}
                         <div className="flex items-center gap-1.5 flex-wrap">
-                          <h4 className="font-bold text-xs sm:text-sm text-slate-100 leading-tight">
+                          <h4 className="font-bold text-xs sm:text-sm leading-tight" style={{ color: dashText(isDark) }}>
                             {m.full_name ?? 'Student'}
                           </h4>
                           {isThisLeader && (
@@ -1302,11 +1302,12 @@ export default function ActiveTeamView({ currentUser, supabaseUserId, team: init
                           )}
                         </div>
 
-                        {/* Row 2: Email address in muted text (Fully visible, break-all for mobile) */}
+                        {/* Row 2: Email address in muted text */}
                         {displayEmail && (
                           <a
                             href={`mailto:${displayEmail}`}
-                            className="block text-[11px] sm:text-xs text-slate-400 break-all leading-snug hover:text-slate-200 transition-colors"
+                            className="block text-[11px] sm:text-xs break-all leading-snug transition-colors hover:underline"
+                            style={{ color: dashText(isDark, true) }}
                           >
                             {displayEmail}
                           </a>
@@ -1314,7 +1315,7 @@ export default function ActiveTeamView({ currentUser, supabaseUserId, team: init
 
                         {/* Row 3: Roll Number + Year of Study */}
                         {(m.roll_number || m.year_of_study) && (
-                          <div className="text-[10px] sm:text-xs text-slate-400 font-mono flex items-center gap-1.5 flex-wrap pt-0.5">
+                          <div className="text-[10px] sm:text-xs font-mono flex items-center gap-1.5 flex-wrap pt-0.5" style={{ color: dashText(isDark, true) }}>
                             {m.roll_number && <span className="tracking-tight">{m.roll_number}</span>}
                             {m.roll_number && m.year_of_study && <span className="opacity-50">•</span>}
                             {m.year_of_study && (
@@ -1332,70 +1333,13 @@ export default function ActiveTeamView({ currentUser, supabaseUserId, team: init
                               <Pill key={s} label={s} color="#22C55E" />
                             ))}
                             {m.skills.length > 4 && (
-                              <span className="text-[9px] self-center text-slate-400">
+                              <span className="text-[9px] self-center" style={{ color: dashText(isDark, true) }}>
                                 +{m.skills.length - 4}
                               </span>
                             )}
                           </div>
                         )}
                       </div>
-                    </div>
-
-                    {/* Right Section: Three-dots menu icon */}
-                    <div className="relative shrink-0">
-                      <button
-                        onClick={() => setActiveMemberMenu(activeMemberMenu === m.id ? null : m.id)}
-                        className="p-1 sm:p-1.5 rounded-lg border transition-all text-slate-400 hover:text-white hover:bg-white/10"
-                        style={{ borderColor: dashBorder(isDark) }}
-                        title="Member Actions"
-                      >
-                        <MoreHorizontal size={16} />
-                      </button>
-
-                      {/* Member Action Dropdown */}
-                      {activeMemberMenu === m.id && (
-                        <div
-                          className="absolute right-0 top-8 sm:top-9 z-30 w-44 rounded-xl p-1.5 shadow-2xl border flex flex-col gap-1 backdrop-blur-md"
-                          style={{
-                            background: isDark ? '#0F172A' : '#FFFFFF',
-                            borderColor: dashBorder(isDark),
-                          }}
-                        >
-                          {isLeader && !isThisLeader && (
-                            <>
-                              <button
-                                onClick={() => {
-                                  setActiveMemberMenu(null);
-                                  setShowTransferConfirm(m);
-                                }}
-                                className="w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-semibold text-amber-400 hover:bg-amber-500/15 flex items-center gap-2 transition-all"
-                              >
-                                <Crown size={13} /> Promote to Leader
-                              </button>
-
-                              <button
-                                onClick={() => {
-                                  setActiveMemberMenu(null);
-                                  handleRemoveMember(m);
-                                }}
-                                className="w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-semibold text-red-400 hover:bg-red-500/15 flex items-center gap-2 transition-all"
-                              >
-                                <X size={13} /> Remove Member
-                              </button>
-                            </>
-                          )}
-
-                          <button
-                            onClick={() => {
-                              setActiveMemberMenu(null);
-                              showToast(`${m.full_name ?? 'Student'} • ${m.email || 'No email'}`);
-                            }}
-                            className="w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-semibold text-slate-300 hover:bg-white/10 flex items-center gap-2 transition-all"
-                          >
-                            <UserCheck size={13} /> View Details
-                          </button>
-                        </div>
-                      )}
                     </div>
                   </motion.div>
                 );
